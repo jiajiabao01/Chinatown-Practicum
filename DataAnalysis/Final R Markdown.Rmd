@@ -1,0 +1,26 @@
+---
+title: "Envisioning Neighborhood Futures After the Chinatown Stitch"
+author: "Luming Xu, Sijia Zhang, Aki Di Sandro, Ray Ma, Yixuan Zhou"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Wrangling
+
+## Property Data
+
++ [Philadelphia Properties and Assessment History](https://opendataphilly.org/datasets/philadelphia-properties-and-assessment-history/)
+
+Census Tract 376, 2, 5
+
+## Basic Predictors
+
++ ACS Census Data:
++ [PPR Properties](https://opendataphilly.org/datasets/ppr-properties/)
+
+# Exploratory Data Analysis
+
