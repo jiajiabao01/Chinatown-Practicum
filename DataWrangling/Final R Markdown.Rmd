@@ -6,10 +6,16 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
+    fig.align = "center") 
+options(scipen=999)
+
+library(sf)
+library(ggplot2)
 ```
 
 # Data Wrangling
+
 
 ## Property Data
 
@@ -17,10 +23,35 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Census Tract 376, 2, 5
 
-## Basic Predictors
+```{r}
+property <- st_read("data/opa_properties_public.geojson") %>%
+  st_transform('EPSG:2272')
+```
+
+```{r}
+# research <- property %>%
+#   dplyr::
+```
+
+
+```{r}
+ggplot() +
+  geom_sf(data = property, aes(color=sale_price)) +
+  theme_void()
+```
+
+
+## Neighborhood Context
 
 + ACS Census Data:
 + [PPR Properties](https://opendataphilly.org/datasets/ppr-properties/)
+
+## The Stitch
+
+## Third Party Data
+
+
+
 
 # Exploratory Data Analysis
 
