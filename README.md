@@ -1,4 +1,4 @@
-# Musa Smart Cities Practicum Scope of Work, Spring, 2025:\nEnvisioning Neighborhood Futures After the Chinatown Stitch
+# Envisioning Neighborhood Futures After the Chinatown Stitch
 
 * **Team Members:**
   * Luming Xu, lumx@upenn.edu
