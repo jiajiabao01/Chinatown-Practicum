@@ -6,6 +6,7 @@ library(arcgislayers)
 library(mapview)
 library(tidyverse)
 library(dplyr)
+library(sf)
 
 Pennsylvania_blockgroup <- arcgislayers::arc_read("https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/5",
                                             where = "STATE = '42'")
