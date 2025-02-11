@@ -1,0 +1,370 @@
+---
+title: "Envisioning Neighborhood Futures After the Chinatown Stitch"
+author: "Luming Xu, Sijia Zhang, Aki Di Sandro, Ray Ma, Yixuan Zhou"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
+    fig.align = "center") 
+options(scipen=999)
+setwd("~/Documents/Upenn/Practicum/2025/Data")
+
+library(sf)
+library(ggplot2)
+library(geojsonio)
+library(dplyr)
+library(tidyverse)
+library(tidycensus)
+
+library(googleway)
+library(osmdata)
+library(ggforce)
+library(geosphere)
+library(ggtext)
+library(showtext) 
+library(sysfonts) 
+library(grid)
+```
+
+
+# Data Wrangling
+
+## Property Data
+
+```{r read_data}
+property <- st_read("/Users/jiajiabao/Documents/Upenn/Practicum/2025/Data/property/opa_properties_public.geojson") %>%
+  st_transform('EPSG:2272')
+
+studyarea1 <- st_read("/Users/jiajiabao/Documents/Upenn/Practicum/2025/Data/studyarea/StudyArea.shp")
+
+studyarea_tract <- st_read("/Users/jiajiabao/Documents/Upenn/Practicum/2025/Data/studyarea/StudyArea_blockgroup_tract.shp")
+
+philly_blockgroup <- st_read("/Users/jiajiabao/Documents/Upenn/Practicum/2025/Data/Philly_blockgroup/Philly_blockgroup.shp")
+```
+
+```{r Sijia_trim_property_study_area1_}
+studyarea1 <- st_transform(studyarea1, st_crs(property))
+property1 <- st_intersection(property, studyarea1)
+st_write(property1, "property1.geojson")
+plot(st_geometry(property1))
+plot(studyarea_tract)
+```
+
+```{r Sijia_zoningcode_mutate}
+property1 <- property1 %>%
+  select(1:2, zoning, location, everything())
+
+na_rows <- property1 %>%
+  st_drop_geometry() %>% 
+  filter(is.na(.data$zoning)) 
+
+property1 <- property1 %>%
+  mutate(zoning = case_when(
+    location == "1310-16 VINE ST" ~ "CMX4",   
+    location == "252-56 N 13TH ST" ~ "CMX4",
+    location == "255-57 N BROAD ST" ~ "CMX4",
+    location == "451 N 12TH ST" ~ "CMX3",
+    location == "453 N 12TH ST" ~"CMX3",
+    location == "447 N 12TH ST" ~ "CMX3",
+    location == "1108 BUTTONWOOD ST" ~ "CMX3",
+    location == "1104 BUTTONWOOD ST" ~ "CMX3",
+    location == "256-60 N MARVINE ST" ~ "CMX4",
+    location == "820 VINE ST" ~ "CMX4",
+    TRUE ~ zoning                        
+  ))
+```
+
+# Census Data
+
+```{r Sijia_Census_Blockgroup}
+census_api_key("92998588496b9701036218b765c78d2ffb7aedcd",install = TRUE, overwrite = TRUE)
+acs_variable_list.2023 <- load_variables(2023, #year
+                                         "acs5", #five year ACS estimates
+                                         cache = TRUE)
+block2023 <-  
+  get_acs(geography = "block group",
+          variables = c("B02001_002E",
+                        "B19013_001E", "B25058_001E",
+                        "B06012_002E"), 
+          year=2023, state=42,
+          county=101, geometry=TRUE) %>%
+  st_transform('EPSG:2272')
+
+block2023 <- 
+  block2023 %>%
+  dplyr::select( -NAME, -moe) %>%
+  spread(key = variable, value = estimate) %>%
+  rename(#TotalPop = B25026_001, 
+         Whites = B02001_002,
+         #FemaleBachelors = B15001_050, 
+        # MaleBachelors = B15001_009,
+         MedHHInc = B19013_001,
+         MedRent = B25058_001)
+         #TotalPoverty = B06012_002)
+
+studyarea_tract_df <- as.data.frame(studyarea_tract) %>% select(-geometry)  # 移除几何列
+block2023_studyarea <- block2023 %>%
+  inner_join(studyarea_tract_df, by = "GEOID") 
+
+
+ggplot() +
+  geom_sf(data = block2023_studyarea, aes(fill = MedRent), color = "white") +
+  scale_fill_viridis_c(option = "cividis", na.value = "gray") +
+  theme_minimal() +
+  ggtitle("Median Rent by Block Group (2023)")
+```
+
+```{r Sijia_CensusTrack}
+tract2023 <-  
+  get_acs(geography = "tract",
+          variables = c("B25026_001E",
+                        "B15001_050E","B15001_009E",
+                        "B19013_001E", "B25058_001E","B06012_002E"), 
+          year = 2023, state = 42, 
+          county = 101, geometry = TRUE) %>%
+  st_transform('EPSG:2272')
+
+tract2023 <- 
+  tract2023 %>%
+  dplyr::select( -NAME, -moe) %>%
+  spread(key = variable, value = estimate) %>%
+  rename(TotalPop = B25026_001, 
+         FemaleBachelors = B15001_050, 
+         MaleBachelors = B15001_009,
+         TotalPoverty = B06012_002)
+
+tract2023 <- tract2023 %>%
+  mutate(GEOID_trimmed = as.numeric(str_sub(GEOID, 7, 9))) 
+
+studyarea_tract_df <- studyarea_tract_df %>%
+  mutate(GEOID_trimmed = as.numeric(str_sub(TRACT, 2, 4)))
+
+tract2023_studyarea <- tract2023 %>%
+  inner_join(studyarea_tract_df, by = "GEOID_trimmed")
+
+ggplot() +
+  geom_sf(data = tract2023_studyarea , aes(fill = TotalPop), color = "white") +
+  scale_fill_viridis_c(option = "cividis", na.value = "gray") +
+  theme_minimal() +
+  ggtitle("Pop by Tract (2023)")
+
+
+
+```
+
+```{r census_block_join}
+block2023_studyarea <- block2023_studyarea %>%
+  mutate(TrackID_clean = as.character(as.numeric(str_sub(TRACT, 2, 4))))  # 取 2-4 位并转换为数值型
+
+property_sf_df <- property_sf %>%
+  mutate(CensusTrack_clean = as.character(as.numeric(census_tract))) %>%
+  st_drop_geometry()  
+
+property_block <- block2023_studyarea %>%
+  inner_join(property_sf_df, by = c("TrackID_clean" = "CensusTrack_clean"))
+
+```
+
+
+## Third Party Data
+```{r Sijia—POI-restaurant-dimsum-bubbletea-teahouse-dessert}
+
+keywords <- c("restaurant", "dim sum restaurant", "desert","tea", "bubble tea", "milk tea", "matcha", "chai", "oolong", "herbal tea")
+place_types <- c("restaurant", "cafe", "bakery") 
+
+all_responses <- list()
+
+for (ptype in place_types) {
+  for (kw in keywords) {
+    Sys.sleep(5)  
+    print(paste("Querying for:", kw, "in", ptype))
+
+    response <- google_places(
+      keyword = kw,
+      location = location,
+      radius = radius,
+      place_type = ptype,
+      key = api_key
+    )
+
+    if (is.null(response[["results"]]) || length(response[["results"]]) == 0) {
+      print(paste("No results for:", kw, "in", ptype))
+      next
+    }
+
+    page_token <- response$next_page_token
+    results_list <- list(response[["results"]])  
+    i <- 1
+
+    while (!is.null(page_token)) {
+      Sys.sleep(10)  
+      print(paste("Fetching page", i + 1, "for", kw, "in", ptype))
+
+      response_next <- google_places(
+        keyword = kw,
+        location = location,
+        radius = radius,
+        place_type = ptype,
+        key = api_key,
+        page_token = page_token
+      )
+
+      if (is.null(response_next[["results"]]) || length(response_next[["results"]]) == 0) {
+        print("No more pages available.")
+        break
+      }
+
+      results_list[[i + 1]] <- response_next[["results"]]
+      page_token <- response_next$next_page_token
+      i <- i + 1
+    }
+
+    all_responses[[paste(kw, ptype)]] <- bind_rows(results_list) %>%
+      filter(!is.na(place_id)) %>%  
+      distinct(place_id, .keep_all = TRUE)
+  }
+}
+
+all_responses <- all_responses[lengths(all_responses) > 0]
+
+final_results <- bind_rows(all_responses) %>%
+  mutate(lat = geometry$location$lat, lng = geometry$location$lng) %>%
+  select(lat, lng, name, place_id, rating) %>%
+  distinct(place_id, .keep_all = TRUE) 
+
+print(nrow(final_results))  
+
+block2023_studyarea <- st_transform(block2023_studyarea, 4326)
+final_sf <- st_as_sf(final_results, coords = c("lng", "lat"), crs = 4326)
+
+final_filtered <- final_sf %>%
+  st_filter(block2023_studyarea)
+
+print(nrow(final_filtered))
+
+
+ggplot() +
+  geom_sf(data = block2023_studyarea, fill = "lightblue", color = "black", alpha = 0.3) +
+  geom_sf(data = final_filtered, aes(color = rating), size = 2) +
+  scale_color_viridis_c() +
+  theme_minimal() +
+  ggtitle("All Food & Tea POIs in Study Area")
+```
+
+
+```{r Sijia—POI-Grocery}
+keywords <- c("grocery store", "supermarket", "asian grocery", "chinese supermarket", "korean market", "japanese grocery", "international market", "food market")
+place_types <- c("supermarket", "grocery_or_supermarket", "convenience_store", "store")
+all_responses <- list()
+
+for (ptype in place_types) {
+  for (kw in keywords) {
+    Sys.sleep(5)  
+    print(paste("Querying for:", kw, "in", ptype))
+
+    response <- google_places(
+      keyword = kw,
+      location = location,
+      radius = radius,
+      place_type = ptype,
+      key = api_key
+    )
+
+    if (is.null(response[["results"]]) || length(response[["results"]]) == 0) {
+      print(paste("No results for:", kw, "in", ptype))
+      next
+    }
+
+    page_token <- response$next_page_token
+    results_list <- list(response[["results"]])  
+    i <- 1
+
+    while (!is.null(page_token)) {
+      Sys.sleep(10)  
+      print(paste("Fetching page", i + 1, "for", kw, "in", ptype))
+
+      response_next <- google_places(
+        keyword = kw,
+        location = location,
+        radius = radius,
+        place_type = ptype,
+        key = api_key,
+        page_token = page_token
+      )
+
+      if (is.null(response_next[["results"]]) || length(response_next[["results"]]) == 0) {
+        print("No more pages available.")
+        break
+      }
+
+      results_list[[i + 1]] <- response_next[["results"]]
+      page_token <- response_next$next_page_token
+      i <- i + 1
+    }
+
+    all_responses[[paste(kw, ptype)]] <- bind_rows(results_list) %>%
+      filter(!is.na(place_id)) %>%  
+      distinct(place_id, .keep_all = TRUE)
+  }
+}
+
+all_responses <- all_responses[lengths(all_responses) > 0]
+
+grocery_results <- bind_rows(all_responses) %>%
+  mutate(lat = geometry$location$lat, lng = geometry$location$lng) %>%
+  select(lat, lng, name, place_id, rating) %>%
+  distinct(place_id, .keep_all = TRUE)
+
+grocery_sf <- st_as_sf(grocery_results, coords = c("lng", "lat"), crs = 4326)
+
+grocery <- grocery_sf %>%
+  st_filter(block2023_studyarea) 
+ggplot() +
+  geom_sf(data = block2023_studyarea, fill = "lightblue", color = "black", alpha = 0.3) +
+  geom_sf(data = grocery, aes(color = rating), size = 2) +
+  scale_color_viridis_c() +
+  theme_minimal() +
+  ggtitle("Grocery Stores & Supermarkets in Study Area")
+```
+
+```{r Sijia_property_join_poi}
+library(units)
+
+grocery <- grocery %>%
+  mutate(CommercialArea = "Grocery")
+final_filtered <- final_filtered %>%
+  mutate(CommercialArea = "Food")
+commercial_areas <- bind_rows(grocery, final_filtered)
+
+
+property_sf <- st_as_sf(property1, coords = c("lng", "lat"), crs = 4326)
+property_sf <- st_transform(property_sf, 4326)
+commercial_areas <- st_transform(commercial_areas, 4326)
+
+property_sf$nearest_dist <- st_distance(property_sf, commercial_areas[st_nearest_feature(property_sf, commercial_areas), ], by_element = TRUE)
+
+
+### Will ask michael for another approach
+property_sf$nearest_dist <- units::set_units(property_sf$nearest_dist, "m")
+property_sf$CommercialArea <- ifelse(
+  property_sf$nearest_dist < set_units(10, "m"),
+  commercial_areas$CommercialArea[st_nearest_feature(property_sf, commercial_areas)],
+  NA
+)
+#st_write(commercial_areas, "commercial_areas.geojson", delete_dsn = TRUE)
+
+ggplot() +
+  geom_sf(data = property_sf, color = "blue", size = 0.5, alpha = 0.5) +
+  geom_sf(data = commercial_areas, color = "red", size = 0.5, alpha = 0.5) +
+  theme_minimal() +
+  ggtitle("Property and Commercial Areas")
+```
+
+
+
+## Neighborhood Context
+## The Stitch
+# Exploratory Data Analysis
+
