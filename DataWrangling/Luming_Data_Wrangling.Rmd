@@ -26,7 +26,7 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 
 + [Vine Street Expressway (I-676)](https://opendataphilly.org/datasets/pa-dot-state-roads/)
 
-```{r}
+```{r Luming-studyarea}
 studyarea <- st_read("data/StudyArea.shp") %>%
   st_transform('EPSG:2272')
 
@@ -90,7 +90,7 @@ ggplot() +
 
 Census Tract 376, 2, 5
 
-```{r}
+```{r property-studyarea}
 property <- st_read("data/opa_properties_public.geojson") %>%
   st_transform('EPSG:2272')
 
@@ -118,7 +118,7 @@ ggplot() +
 
 ### Data Wrangling
 
-```{r}
+```{r Luming-DataWrangling}
 nhoods <- 
   st_read("data/philadelphia-neighborhoods.geojson") %>%
   st_transform('EPSG:2272')
@@ -179,7 +179,7 @@ retail <-
 
 ### Data Processing
 
-```{r}
+```{r Luming-DataWrangling-Property}
 landuse_rename <- landuse %>%
   mutate(landuse = 
            case_when(
