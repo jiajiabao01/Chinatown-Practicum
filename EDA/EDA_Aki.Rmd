@@ -1,5 +1,5 @@
 ---
-title: "Discontinuity Model"
+title: "EDA - Aki"
 author: "Luming Xu, Sijia Zhang, Aki Di Sandro, Ray Ma, Yixuan Zhou"
 date: "`r Sys.Date()`"
 output:
@@ -32,12 +32,12 @@ census_api_key("f2855a6037284cb9cbed55e96e6b99be17ee05c6", overwrite = TRUE, ins
 ```{r load_data}
 # study area
 # studyarea <- st_read("data/StudyArea.shp") %>% 
-studyarea <- st_read("Chinatown/Dataset/studyarea/StudyArea.shp") %>%
+studyarea <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/studyarea/StudyArea.shp") %>%
   st_transform('EPSG:2272')
 
 # Philly block groups
 # blockgroups <- st_read("data/Philly_blockgroup.shp") %>%
-blockgroups <- st_read("Chinatown/Dataset/Philly_blockgroup/Philly_blockgroup.shp") %>%
+blockgroups <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/Philly_blockgroup/Philly_blockgroup.shp") %>%
   st_transform('EPSG:2272')
 
 # philly bounds
@@ -58,7 +58,7 @@ hydro <- st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/servi
 #          "data/PhillyStateRoads.shp")
 
 # read in pre-filtered stateroads data
-stateroads_inphilly <- st_read("data/PhillyStateRoads.shp")
+stateroads_inphilly <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/PhillyStateRoads.shp")
 
 philly_mainhighways <- stateroads_inphilly %>%
   filter(TRAF_RT_NO %in% c("I", "US"),
@@ -99,13 +99,13 @@ retail_produce <- st_read("https://opendata.arcgis.com/datasets/53b8a1c653a74c92
 
 
 # checking out what Luming_property.csv looks like
-luming_property <- read.csv("Dataset/Luming_property.csv")
+luming_property <- read.csv("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/Luming_property.csv")
 # looking at which properties were saved in luming_property
 luming_properties <- philly_properties %>% 
   filter(objectid %in% luming_property$objectid)
 
 # checking out what property_sijia_eda.geojson looks like
-sijia_eda <- st_read("Dataset/property_sijia_eda.geojson")
+sijia_eda <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/property_sijia_eda.geojson")
 
 ```
 
@@ -210,84 +210,3 @@ ggplot() +
 # Case Study of Philadelphia's Highways and Housing Price
 
 For all Philly properties, calculate the distance from highway and see how it relates to price.
-
-```{r dist_highway}
-# taking Luming's distance calculator function
-calculate_nearest_distance <- function(set_points, other_layer) {
-  nearest_idx <- st_nearest_feature(set_points, other_layer)
-  st_distance(set_points, other_layer[nearest_idx, ], by_element = TRUE) %>% as.numeric()
-}
-
-# calculate each property's distance to highways of interest
-properties1 <- philly_properties %>% 
-  mutate(dist_to_US001 = calculate_nearest_distance(geometry, 
-                                     philly_mainhighways %>% 
-                                       filter(ST_RT_NO == "0001")),
-         dist_to_I076 = calculate_nearest_distance(geometry, 
-                                    philly_mainhighways %>% 
-                                      filter(ST_RT_NO == "0076")),
-         dist_to_I095 = calculate_nearest_distance(geometry,
-                                    philly_mainhighways %>% 
-                                      filter(ST_RT_NO == "0095")),
-         dist_to_I676 = calculate_nearest_distance(geometry, 
-                                    philly_mainhighways %>%
-                                      filter(ST_RT_NO == "0676")))
-
-# create column that specifies which highway is closest and what the actual distance is
-
-# find closest highway
-properties2 <- properties1 %>% 
-  select(matches("objectid|dist_to")) %>% 
-  pivot_longer(cols = 2:5,
-               names_to = "highway",
-               values_to = "distance") %>% 
-  group_by(objectid) %>% 
-  summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>% 
-  ungroup()
-
-# join closest highway
-properties3 <- left_join(properties1, 
-                         properties2 %>% st_drop_geometry(), 
-                         by = "objectid") %>% 
-  mutate(closest_highway = case_when(
-           dist_to_closest_highway == dist_to_US001 ~ "US-1",
-           dist_to_closest_highway == dist_to_I076 ~ "I-76",
-           dist_to_closest_highway == dist_to_I095 ~ "I-95",
-           dist_to_closest_highway == dist_to_I676 ~ "I-676",
-           .default = NA))
-
-# save file
-# st_write(properties3, "data/philly_properties_dist_highway.geojson")
-
-```
-
-Are there differences between how price of property relates to dist_to_closest_highway depending on type of highway (whether highway cuts through neighborhood or not)?
-
-```{r price_vs_dist2highway}
-# need to check if there are 0 values in sale_price before log transforming
-
-# simple scatter of price and dist2closesthighway
-ggplot(data = properties3) +
-  geom_point(aes(x = dist_to_closest_highway, y = sale_price, color = closest_highway))
-
-# simple regression
-fit1 <- lm(sale_price ~ dist_to_closest_highway, data = properties3)
-
-summary(fit1)
-
-# 
-
-```
-
-
-
-# Relationship between Housing Price and other variables
-
-Notably, I'm exploring the relationship between housing price and distance to highways, distance to parks, distance to commercial areas, distance to schools.
-
-For now, I'm using the study area-related data that Luming and Sijia compiled
-
-```{r price_otheramenities}
-
-```
-
