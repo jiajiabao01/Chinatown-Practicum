@@ -1,0 +1,293 @@
+---
+title: "Discontinuity Model"
+author: "Luming Xu, Sijia Zhang, Aki Di Sandro, Ray Ma, Yixuan Zhou"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+---
+
+```{r r-setup, results='hide', echo = F, eval = T, warning = F, message = F}
+knitr::opts_chunk$set(echo = T, eval = T, warning = F, message = F)
+
+# set working directory
+setwd("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
+
+# load all packages
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(ggplot2)
+
+# read in API
+census_api_key("f2855a6037284cb9cbed55e96e6b99be17ee05c6", overwrite = TRUE, install = T)
+
+# mapbox API
+# options(rdeck.mapbox_access_token = "pk.eyJ1IjoiY2hpYmlha2kiLCJhIjoiY20xODh2NTNqMTBvaDJqb2ptbjM4ZGViayJ9.un9M1_-S6kI8M0ktqZLz_Q")
+
+```
+
+# Loading all data
+
+```{r load_data}
+# study area
+# studyarea <- st_read("data/StudyArea.shp") %>% 
+studyarea <- st_read("Chinatown/Dataset/studyarea/StudyArea.shp") %>%
+  st_transform('EPSG:2272')
+
+# Philly block groups
+# blockgroups <- st_read("data/Philly_blockgroup.shp") %>%
+blockgroups <- st_read("Chinatown/Dataset/Philly_blockgroup/Philly_blockgroup.shp") %>%
+  st_transform('EPSG:2272')
+
+# philly bounds
+philly_bounds <- st_union(blockgroups)
+
+# philly hydrology (bounded by philly_bounds)
+hydro <- st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Hydrographic_Features_Poly/FeatureServer/1/query?outFields=*&where=1%3D1&f=geojson") %>% 
+    st_transform(crs = 'EPSG:2272') %>% 
+  st_intersection(philly_bounds)
+
+# highway
+# stateroads_inphilly <- st_read("data/PaStateRoads2024_03.geojson") %>% 
+#   st_transform('EPSG:2272') %>% 
+#   st_intersection(philly_bounds)
+
+# write out stateroads_inphilly as its own file since it's big
+# st_write(stateroads_inphilly,
+#          "data/PhillyStateRoads.shp")
+
+# read in pre-filtered stateroads data
+stateroads_inphilly <- st_read("data/PhillyStateRoads.shp")
+
+philly_mainhighways <- stateroads_inphilly %>%
+  filter(TRAF_RT_NO %in% c("I", "US"),
+         ST_RT_NO %in% c("0001", "0095", "0076", "0676")) %>%
+  dplyr::select(STREET_NAM, ST_RT_NO, TRAF_RT_NO, TRAF_RT__1)
+
+# save and only use the highways of interest
+# for now, interested in comparing highways that cut through neighborhoods vs those that don't
+
+# ACS 
+
+
+# philly property data (https://opendataphilly.org/datasets/philadelphia-properties-and-assessment-history/)
+philly_properties <- st_read("https://phl.carto.com/api/v2/sql?filename=opa_properties_public&format=geojson&skipfields=cartodb_id&q=SELECT+*+FROM+opa_properties_public") %>% 
+  st_transform(crs = 'EPSG:2272')
+
+# philly park data (https://opendataphilly.org/datasets/ppr-properties/)
+philly_parks <- st_read("https://opendata.arcgis.com/datasets/d52445160ab14380a673e5849203eb64_0.geojson") %>%
+  st_transform(crs = 'EPSG:2272')
+
+# philly schools
+school <-
+  st_read("https://opendata.arcgis.com/datasets/d46a7e59e2c246c891fbee778759717e_0.geojson") %>%
+  st_transform('EPSG:2272')
+
+# city facilities (https://opendataphilly.org/datasets/city-facilities-master-facilities-database/)
+facilities <- st_read("https://opendata.arcgis.com/datasets/b3c133c3b15d4c96bcd4d5cc09f19f4e_0.geojson") %>%
+  st_transform('EPSG:2272') %>% 
+  filter(STATUS == "A") # remove inactive sites
+
+# libraries (from facilities data)
+libraries <- facilities %>% 
+  filter(ASSET_GROUP1 == "A8")
+
+# produce (LPSS, HPSS -- indicators for produce; low or high produce supply stores)
+retail_produce <- st_read("https://opendata.arcgis.com/datasets/53b8a1c653a74c92b2de23a5d7bf04a0_0.geojson") %>%
+  st_transform('EPSG:2272')
+
+
+# checking out what Luming_property.csv looks like
+luming_property <- read.csv("Dataset/Luming_property.csv")
+# looking at which properties were saved in luming_property
+luming_properties <- philly_properties %>% 
+  filter(objectid %in% luming_property$objectid)
+
+# checking out what property_sijia_eda.geojson looks like
+sijia_eda <- st_read("Dataset/property_sijia_eda.geojson")
+
+```
+
+# Initial plots
+
+```{r plots_initial}
+# interstate highways in philly
+ggplot() +
+    geom_sf(data = philly_bounds) +
+    geom_sf(data = stateroads_inphilly %>% 
+              filter(TRAF_RT_NO == "I"))
+
+# US highways in philly
+ggplot() +
+    geom_sf(data = philly_bounds) +
+    geom_sf(data = stateroads_inphilly %>% 
+              filter(TRAF_RT_NO == "US"))
+
+# PA state highways in philly
+ggplot() +
+    geom_sf(data = philly_bounds) +
+    geom_sf(data = stateroads_inphilly %>% 
+              filter(TRAF_RT_NO == "PA"))
+
+# all other roads in philly
+ggplot() +
+    geom_sf(data = philly_bounds) +
+    geom_sf(data = stateroads_inphilly %>% 
+              filter(!(TRAF_RT_NO %in% c("I", "US", "PA"))))
+
+# I-95, US-1, I-676, and I-76
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624", color = "#57470a") +
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = philly_mainhighways,
+          aes(color = ST_RT_NO)) +
+  
+  # add custom colors
+  scale_color_manual(values = c("0001" = "red",
+                                "0076" = "blue",
+                                "0095" = "purple",
+                                "0676" = "pink")) +
+  
+  labs(title = "Case Study of Highways in Philly",
+       subtitle = "US-1, I-76, I-95, and I-676",
+       color = "Highways") +
+  theme_void()
+
+# looking at study area within philly bounds
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624") + 
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = studyarea, fill = "coral")
+
+# philly parks
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624") + 
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "darkgreen", color = "transparent")
+
+# philly schools
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624") + 
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = school, color = "brown4") # point data
+
+# libraries
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624") + 
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = libraries, color = "blue4") # point data
+
+# transit / looking at what this category actually consists of....
+# looks like there's point geography for parking lots, some random transit stops, and heli pad station
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624") + 
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = facilities %>% 
+            filter(ASSET_GROUP1 == "A17",
+                   grepl("Parking", ASSET_SUBT1_DESC)), color = "pink1") # point data
+
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624") + 
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = sijia_eda, color = "purple3")
+
+# prison facilities
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624") + 
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = facilities %>% 
+            filter(ASSET_GROUP2 == "A13.3"), color = "lightgrey") # point data
+
+# all philly properties
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#b39624") + 
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = philly_properties, color = "black")
+
+```
+
+# Case Study of Philadelphia's Highways and Housing Price
+
+For all Philly properties, calculate the distance from highway and see how it relates to price.
+
+```{r dist_highway}
+# taking Luming's distance calculator function
+calculate_nearest_distance <- function(set_points, other_layer) {
+  nearest_idx <- st_nearest_feature(set_points, other_layer)
+  st_distance(set_points, other_layer[nearest_idx, ], by_element = TRUE) %>% as.numeric()
+}
+
+# calculate each property's distance to highways of interest
+properties1 <- philly_properties %>% 
+  mutate(dist_to_US001 = calculate_nearest_distance(geometry, 
+                                     philly_mainhighways %>% 
+                                       filter(ST_RT_NO == "0001")),
+         dist_to_I076 = calculate_nearest_distance(geometry, 
+                                    philly_mainhighways %>% 
+                                      filter(ST_RT_NO == "0076")),
+         dist_to_I095 = calculate_nearest_distance(geometry,
+                                    philly_mainhighways %>% 
+                                      filter(ST_RT_NO == "0095")),
+         dist_to_I676 = calculate_nearest_distance(geometry, 
+                                    philly_mainhighways %>%
+                                      filter(ST_RT_NO == "0676")))
+
+# create column that specifies which highway is closest and what the actual distance is
+
+# find closest highway
+properties2 <- properties1 %>% 
+  select(matches("objectid|dist_to")) %>% 
+  pivot_longer(cols = 2:5,
+               names_to = "highway",
+               values_to = "distance") %>% 
+  group_by(objectid) %>% 
+  summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>% 
+  ungroup()
+
+# join closest highway
+properties3 <- left_join(properties1, 
+                         properties2 %>% st_drop_geometry(), 
+                         by = "objectid") %>% 
+  mutate(closest_highway = case_when(
+           dist_to_closest_highway == dist_to_US001 ~ "US-1",
+           dist_to_closest_highway == dist_to_I076 ~ "I-76",
+           dist_to_closest_highway == dist_to_I095 ~ "I-95",
+           dist_to_closest_highway == dist_to_I676 ~ "I-676",
+           .default = NA))
+
+# save file
+# st_write(properties3, "data/philly_properties_dist_highway.geojson")
+
+```
+
+Are there differences between how price of property relates to dist_to_closest_highway depending on type of highway (whether highway cuts through neighborhood or not)?
+
+```{r price_vs_dist2highway}
+# need to check if there are 0 values in sale_price before log transforming
+
+# simple scatter of price and dist2closesthighway
+ggplot(data = properties3) +
+  geom_point(aes(x = dist_to_closest_highway, y = sale_price, color = closest_highway))
+
+# simple regression
+fit1 <- lm(sale_price ~ dist_to_closest_highway, data = properties3)
+
+summary(fit1)
+
+# 
+
+```
+
+
+
+# Relationship between Housing Price and other variables
+
+Notably, I'm exploring the relationship between housing price and distance to highways, distance to parks, distance to commercial areas, distance to schools.
+
+For now, I'm using the study area-related data that Luming and Sijia compiled
+
+```{r price_otheramenities}
+
+```
+
