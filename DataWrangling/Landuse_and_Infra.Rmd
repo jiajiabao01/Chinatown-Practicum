@@ -1,0 +1,207 @@
+---
+title: "Land use and Infrastructures"
+output: html_document
+date: "2025-01-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
+    fig.align = "center") 
+options(scipen=999)
+
+library(sf)
+library(ggplot2)
+library(tidycensus)
+library(tidyverse)
+library(lwgeom)
+library(FNN)
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+```
+
+```{r}
+studyarea <- st_read("data/StudyArea.shp") %>%
+  st_transform('EPSG:2272')
+
+Philly_blockgroup <- st_read("data/Philly_blockgroup.shp") %>%
+  st_transform('EPSG:2272')
+```
+
+```{r}
+landuse <- 
+  st_read("data/Land_Use_ClipLayer.shp") %>%
+  st_transform('EPSG:2272')
+
+Chinatown_Stitch <- landuse %>%
+  filter(OBJECTID_1 %in% c(500392, 511294, 511361))
+```
+
+```{r}
+park <- 
+  st_read("https://opendata.arcgis.com/datasets/d52445160ab14380a673e5849203eb64_0.geojson") %>%
+  st_transform('EPSG:2272')
+
+metro <- 
+  st_read("https://opendata.arcgis.com/api/v3/datasets/af52d74b872045d0abb4a6bbbb249453_0/downloads/data?format=geojson&spatialRefId=4326") %>%
+  st_transform('EPSG:2272') %>%
+  mutate(Type = "metro")
+
+city_hall <- metro[metro$Station == 'City Hall', 6]
+
+trolley <-
+    st_read("https://opendata.arcgis.com/api/v3/datasets/dd2afb618d804100867dfe0669383159_0/downloads/data?format=geojson&spatialRefId=4326") %>%
+  st_transform('EPSG:2272')
+
+trolley_renamed <- trolley %>%
+  rename(Station = StopName,
+         Route = LineAbbr,
+         Longitude = Lon,
+         Latitude = Lat) %>%
+  mutate(Type = "trolley")
+
+# Combine both datasets into one
+transit <- bind_rows(metro, trolley_renamed)
+
+school <-
+  st_read("https://opendata.arcgis.com/datasets/d46a7e59e2c246c891fbee778759717e_0.geojson") %>%
+  st_transform('EPSG:2272')
+
+hospital <-
+  st_read("data/DOH_Hospitals202311.geojson") %>%
+  st_transform('EPSG:2272') %>%
+  st_filter(st_union(Philly_blockgroup))
+
+water <-
+  st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Hydrographic_Features_Poly/FeatureServer/1/query?outFields=*&where=1%3D1&f=geojson") %>%
+  st_transform('EPSG:2272')
+
+bike_network <- 
+  st_read("data/Bike_Network.geojson") %>%
+  st_transform('EPSG:2272')
+
+#phillyCrimes <- 
+  #st_read("data/phillyCrimes.geojson") %>%
+  #st_transform('EPSG:2272')
+
+# LPSS_PER1000: Number of low-produce supply stores per 1,000 people
+# HPSS_PER1000: Number of high-produce supply stores per 1,000 people
+retail <-
+  st_read("https://opendata.arcgis.com/datasets/53b8a1c653a74c92b2de23a5d7bf04a0_0.geojson") %>%
+  st_transform('EPSG:2272')
+```
+
+```{r}
+landuse_rename <- landuse %>%
+  mutate(landuse = 
+           case_when(
+    C_DIG2DESC == 11 ~ "Residential Low",
+    C_DIG2DESC == 12 ~ "Residential Medium",
+    C_DIG2DESC == 13 ~ "Residential High",
+    C_DIG2DESC == 21 ~ "Commercial Consumer",
+    C_DIG2DESC == 22 ~ "Commercial Business/Professional",
+    C_DIG2DESC == 23 ~ "Commercial Mixed Residential",
+    C_DIG2DESC == 31 ~ "Industrial",
+    C_DIG2DESC == 41 ~ "Civic/Institution",
+    C_DIG2DESC == 51 ~ "Transportation",
+    C_DIG2DESC == 61 ~ "Culture/Amusement",
+    C_DIG2DESC == 62 ~ "Active Recreation",
+    C_DIG2DESC == 71 ~ "Park/Open Space",
+    C_DIG2DESC == 72 ~ "Cemetery",
+    C_DIG2DESC == 81 ~ "Water",
+    C_DIG2DESC == 91 ~ "Vacant",
+    C_DIG2DESC == 92 ~ "Other/Unknown"
+  ))
+```
+
+```{r}
+landuse_colors <- c(
+  "Residential Low" = "#FFFF00",
+  "Residential Medium" = "#FFD700",
+  "Residential High" = "#FFA500",
+  "Commercial Consumer" = "#FF6347",
+  "Commercial Business/Professional" = "#FF4500",
+  "Commercial Mixed Residential" = "#DC143C",
+  "Industrial" = "#A020F0",
+  "Civic/Institution" = "#0000FF",
+  "Transportation" = "gray95",
+  "Culture/Amusement" = "#90EE90",
+  "Active Recreation" = "#00FA9A",     
+  "Park/Open Space" = "#32CD32",        
+  "Cemetery" = "#8B2323",               
+  "Water" = "#0000FF",            
+  "Vacant" = "#D3D3D3", 
+  "Other/Unknown" = "black" 
+)
+```
+
+```{r}
+landuse_colors <- c(
+  "Residential Low" = "#FFFFB3",
+  "Residential Medium" = "#FFEB8B",
+  "Residential High" = "#FFCC80",
+  "Commercial Consumer" = "#FFB3B3",
+  "Commercial Business/Professional" = "#FF9980",
+  "Commercial Mixed Residential" = "#FF6666",
+  "Industrial" = "#D6A3FF",
+  "Civic/Institution" = "#66B3FF",
+  "Transportation" = "gray95",
+  "Culture/Amusement" = "#C1FFC1",
+  "Active Recreation" = "#66FFD9",     
+  "Park/Open Space" = "#99FF66",        
+  "Cemetery" = "#FF9999",               
+  "Water" = "#99CCFF",            
+  "Vacant" = "#D3D3D3", 
+  "Other/Unknown" = "gray25"
+)
+```
+
+```{r}
+ggplot(data = landuse_rename%>% filter(!is.na(landuse))) +
+  geom_sf(aes(fill = landuse), color=NA) +
+  scale_fill_manual(values = landuse_colors,na.value = "white") +
+  labs(title = "Chinatown Land Use", fill = "Category") +
+  theme_void() +
+  theme(legend.position = "right",
+        legend.key.size = unit(0.5, "cm"),
+        legend.text = element_text(size = 8))
+```
+
+```{r}
+park_valid <- st_make_valid(park)
+transit_valid <- st_make_valid(transit)
+city_hall_valid <- st_make_valid(city_hall)
+school_valid <- st_make_valid(school)
+water_valid <- st_make_valid(water)
+bike_network_valid <- st_make_valid(bike_network)
+
+# Clip each dataset to the study area
+park_clipped <- st_intersection(park_valid, studyarea)
+transit_clipped <- st_intersection(transit_valid, studyarea)
+city_hall_clipped <- st_intersection(city_hall_valid, studyarea)
+school_clipped <- st_intersection(school_valid, studyarea)
+water_clipped <- st_intersection(water_valid, studyarea)
+bike_network_clipped <- st_intersection(bike_network_valid, studyarea)
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = landuse, fill = "white", color = "gray85", size = 0.05) +
+  
+  geom_sf(data = park_clipped, aes(fill = "Park"), color = NA, alpha = 1) +
+  
+  geom_sf(data = transit_clipped, aes(color = "Transit"), size = 4) +
+  
+  #geom_sf(data = city_hall_clipped, aes(color = "City Hall"), size = 5, shape = 16) +
+
+  geom_sf(data = school_clipped, aes(color = "School"), size = 4) +
+
+  geom_sf(data = bike_network_clipped, aes(color = "Bike Network"), size = 1) +
+  
+  scale_color_manual(values = c("Transit" = "#66B3FF", "School" = "#FF9980", "Bike Network" = "#D6A3FF"), name = NULL) +
+  scale_fill_manual(values = c("Park" = "#99FF66"), name = NULL) +
+  labs(title = "Chinatown Infrastructures") +
+  theme_void() +
+  theme(legend.position = "right",
+        legend.key.size = unit(0.5, "cm"),
+        legend.text = element_text(size = 8))
+```
