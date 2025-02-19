@@ -26,7 +26,7 @@ This repository documents the data analysis part of the project. Our outcomes wi
 |  2   |  Jan 28  |  Meet with the client; acquire materials  |
 |  3   |  Feb 4   |  _Data Wrangling_: determine the study area and research subjects   |
 |  4   |  Feb 11   |  _Data Wrangling_: finish wrangling the relevant factors and connect to the property data |
-|  5   |  Feb 18  |  _Exploratory Analysis_: finish basic geography, high effect analysis, and case studies of Philly  |
+|  5   |  Feb 18  |  _Exploratory Analysis_: finish basic geography, highway effect analysis, and case studies of Philly  |
 |  6   |  Feb 25  |  1st Presentation  |
 |  7   |  Mar 4   |  _Modeling_:   |
 |  -   |  Mar 11   |  **-(SPRING BREAK)-**  |
