@@ -1,0 +1,120 @@
+---
+title: 'EDA: Discontinuity Effects'
+author: "Luming Xu"
+date: "`r Sys.Date()`"
+output:
+    html_document:
+      code_folding: hide
+---
+
+```{r setup, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
+    fig.align = "center")
+knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
+
+library(sf)
+library(ggplot2)
+library(tidycensus)
+library(tidyverse)
+library(ggtext)
+library(glue)
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+```
+
+# Data Processing
+
+```{r quiet = TRUE, results = 'hide'}
+property_EDA <- st_read("Dataset/property_sijia_eda.geojson") %>%
+  st_transform('EPSG:2272')
+
+I_676 <- st_read("Dataset/Highways/I_676.shp") %>%
+  st_transform('EPSG:2272')
+
+studyarea_north <- st_read("Dataset/studyarea-sub/studyarea_north.shp") %>%
+  st_transform('EPSG:2272')
+
+studyarea_south <- st_read("Dataset/studyarea-sub/studyarea_south.shp") %>%
+  st_transform('EPSG:2272')
+
+```
+
+```{r}
+property_highway <- 
+  rbind(
+    property_EDA %>% st_intersection(studyarea_north["geometry"]) %>%
+      mutate(I676 = "north"),
+    property_EDA %>% st_intersection(studyarea_south["geometry"]) %>%
+      mutate(I676 = "south")
+  )
+
+property_highway_distance <- property_highway %>%
+  mutate(distance_to_highway = case_when(
+    I676 == "north" ~ distance_to_I676,
+    I676 == "south" ~ -distance_to_I676
+  ))
+
+property_summary <- property_highway_distance %>%
+  st_drop_geometry() %>%
+  group_by(distance_to_highway, I676) %>%
+  summarise(sale_price.x = mean(sale_price.x, na.rm = TRUE), .groups = "drop")
+
+property_summary_plot <- property_summary %>%
+  filter(sale_price.x > 10 & sale_price.x < 1e6)
+```
+
+```{r}
+ggplot(property_summary_plot, aes(x = sale_price.x)) +
+  geom_histogram(bins = 30, fill = "#6D9EC1", color = "black", alpha = 0.5) +
+  labs(title = "Distribution of Sale Price") +
+  theme_minimal()
+```
+
+# Discontinuity Effects
+
+local regression line
+
+This ‘boundary discontinuity’ plot highlights how the sale-price conditions change on either immediate side of the I-676.
+
+```{r}
+ggplot(property_summary_plot, aes(x = distance_to_highway, y = sale_price.x, color = I676)) +
+  geom_point(size = 0.5) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  geom_vline(xintercept = 0, color = "black", size = 2) +
+  scale_colour_manual(values = c("#eb5600", "#1a9988")) +
+  theme_minimal() +
+  theme(legend.position = "None",
+        plot.title = element_text(size = 18, face = "bold"),
+        plot.subtitle = ggtext::element_markdown(size = 12),
+        plot.caption = element_text(hjust = 0)) +
+  labs(title = 'Sale Price as a Function of Distance to the Highway', 
+       subtitle = glue("<span style='color:#1a9988;'>South Side</span> vs. <span style='color:#eb5600;'>North Side</span>"),
+       # caption = "Figure 4.1",
+       # x = "South Side of the Highway          I-676                                     North Side of the Highway",
+       x = "Distance to the Highyway (m)                         ",
+       y = "Sale Price") +
+    geom_label(aes(x = 0, y = 750000,
+                 label = "I-676"),
+             fill = "black", color = "white", fontface = "bold", size = 5)
+
+  # theme(
+  #   legend.position = "None",
+  #   plot.title = element_text(face = "bold", size = 18),
+  #   plot.caption = element_markdown(size = 12)
+  # ) +
+  # # Manually adding colored text for x-axis labels
+  # annotate("text", x = min(property_summary_plot$distance_to_highway), y = 750000, 
+  #          label = "South Side", color = "#1a9988", size = 5, hjust = 0) +
+  # annotate("text", x = max(property_summary_plot$distance_to_highway), y = 750000, 
+  #          label = "North Side", color = "#eb5600", size = 5, hjust = 1) +
+
+
+```
+
+# Basic Geography (Modify)
+
+```{r}
+
+```
+
+
