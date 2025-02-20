@@ -499,6 +499,7 @@ Calculate each property's distance to highways.
 
 ```{r calc_dist2highway}
 # calculate each property's distance to highways of interest
+# distance is in feet
 start_time <- Sys.time()
 prop500 <- properties500_clean %>% 
   select(matches("assessment_date|building_code|category_code|census_tract|geographic|zip|market_value|parcel|sale_|taxable|_area|year_built|objectid|geometry|price")) %>% 
@@ -540,41 +541,77 @@ prop500 <- left_join(prop500,
 # st_write(prop500, "/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_prop500_dist2highway.geojson")
 
 # read in pre-saved file
-prop500_new <- st_read("/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/phl_properties_dist2highway/philly_prop500_dist2highway.geojson")
+# prop500_new <- st_read("/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/data/philly_prop500_dist2highway.geojson")
 
 ```
 
-
-```{r dist_highway}
-
-# # create column that specifies which highway is closest and what the actual distance is
-# 
-
-# join closest highway
-properties3 <- left_join(properties1,
-                         properties2 %>% st_drop_geometry(),
-                         by = "objectid") %>%
-  mutate(closest_highway = case_when(
-           dist_to_closest_highway == dist_to_US001 ~ "US-1",
-           dist_to_closest_highway == dist_to_I076 ~ "I-76",
-           dist_to_closest_highway == dist_to_I095 ~ "I-95",
-           dist_to_closest_highway == dist_to_I676 ~ "I-676",
-           .default = NA))
-
-# save file
-# st_write(properties3, "data/philly_properties_dist_highway.geojson")
-
-```
-
-
+Now, look at relationship between distance to highway and price.
 
 ```{r price_dist2highway}
-# simple scatter of price and dist2closesthighway
-ggplot(data = properties3) +
-  geom_point(aes(x = dist_to_closest_highway, y = sale_price, color = closest_highway))
+# map of properties within 500m of highway colored by which highway they're closest to
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+  geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "darkgreen", color = "transparent") +
+  geom_sf(data = highways_500buffer,
+          color = "transparent", fill = "grey", alpha = 0.4) +
+  geom_sf(data = prop500,
+          aes(color = closest_highway), size = 0.3) +
+  geom_sf(data = philly_mainhighways,
+          color = "black") +
+  
+  # add custom colors
+  scale_color_manual(values = c("US-1" = "red",
+                                "I-76" = "blue",
+                                "I-95" = "purple",
+                                "I-676" = "pink")) +
+  
+  labs(title = "Properties within 500m of Highways in Philly",
+       subtitle = "US-1, I-76, I-95, and I-676") +
+  theme_void()
 
-# simple regression
-fit1 <- lm(sale_price ~ dist_to_closest_highway, data = properties3)
+# simple scatter of price and dist2closesthighway
+ggplot(data = prop500, 
+       aes(x = dist_to_closest_highway, y = sale_price, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm") +
+  scale_color_manual(values = c("US-1" = "red",
+                                "I-76" = "blue",
+                                "I-95" = "purple",
+                                "I-676" = "pink")) +
+  scale_fill_manual(values = c("US-1" = "red",
+                               "I-76" = "blue",
+                               "I-95" = "purple",
+                               "I-676" = "pink")) +
+  labs(title = "Property Price as a function of Distance to Closest Highway",
+       subtitle = "Colored by Closest Highway; Properties within 500m of highways",
+       fill = "Closest Highway",
+       color = "Closest Highway") +
+  theme_minimal()
+
+# simple scatter of price (as log price per total area in sq ft) and dist2closesthighway
+ggplot(data = prop500, 
+       aes(x = dist_to_closest_highway, y = log_price_perTA, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm") +
+  scale_color_manual(values = c("US-1" = "red",
+                                "I-76" = "blue",
+                                "I-95" = "purple",
+                                "I-676" = "pink")) +
+  scale_fill_manual(values = c("US-1" = "red",
+                               "I-76" = "blue",
+                               "I-95" = "purple",
+                               "I-676" = "pink")) +
+  labs(title = "Property Price (log price per TA) as a function of Distance to Closest Highway",
+       subtitle = "Colored by Closest Highway; Properties within 500m of highways",
+       fill = "Closest Highway",
+       color = "Closest Highway") +
+  theme_minimal()
+
+# simple regression of price (log_price_perTA) and dist2closesthighway
+fit1 <- lm(log_price_perTA ~ dist_to_closest_highway, data = prop500)
 
 summary(fit1)
 
