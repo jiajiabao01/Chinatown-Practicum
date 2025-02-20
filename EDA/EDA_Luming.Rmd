@@ -111,6 +111,67 @@ ggplot(property_summary_plot, aes(x = distance_to_highway, y = sale_price.x, col
 
 ```
 
+# Case Study (for Aki)
+
+```{r quiet = TRUE, results = 'hide'}
+prop500 <- st_read("Dataset/phl_properties_dist2highway/philly_prop500_dist2highway.geojson") %>%
+  st_transform('EPSG:2272')
+
+prop500_plot <- prop500 %>%
+  filter(sale_price > 10 & sale_price < 1e6)
+```
+
+```{r}
+ggplot(data = prop500_plot, 
+       aes(x = dist_to_closest_highway, y = sale_price, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .1, size = 0.3) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  scale_color_manual(values = c("US-1" = "red",
+                                "I-76" = "blue",
+                                "I-95" = "purple",
+                                "I-676" = "pink")) +
+  scale_fill_manual(values = c("US-1" = "red",
+                               "I-76" = "blue",
+                               "I-95" = "purple",
+                               "I-676" = "pink")) +
+  labs(title = "Property Price as a function of Distance to Closest Highway",
+       subtitle = "Colored by Closest Highway; Properties within 500m of highways",
+       fill = "Closest Highway",
+       color = "Closest Highway") +
+  theme_minimal()
+```
+
+```{r}
+cor <- prop500_plot %>%
+  st_drop_geometry() %>%
+  group_by(closest_highway) %>%
+  summarize(correlation = cor(dist_to_closest_highway, log_price_perTA, method = "pearson"), .groups = "drop")
+cor
+```
+
+```{r}
+# simple scatter of price (as log price per total area in sq ft) and dist2closesthighway
+ggplot(data = prop500_plot, 
+       aes(x = dist_to_closest_highway, y = log_price_perTA, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .1, size = 0.3) +
+  geom_smooth(method = "lm", se=F, size = 1.2) +
+  scale_color_manual(values = c("US-1" = "red",
+                                "I-76" = "blue",
+                                "I-95" = "purple",
+                                "I-676" = "pink")) +
+  scale_fill_manual(values = c("US-1" = "red",
+                               "I-76" = "blue",
+                               "I-95" = "purple",
+                               "I-676" = "pink")) +
+  labs(title = "Property Price (log price per TA) as a function of Distance to Closest Highway",
+       subtitle = "Colored by Closest Highway; Properties within 500m of highways",
+       fill = "Closest Highway",
+       color = "Closest Highway") +
+  theme_minimal()
+```
+
 # Basic Geography (Modify)
 
 ```{r}
