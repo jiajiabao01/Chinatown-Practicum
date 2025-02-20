@@ -18,6 +18,8 @@ library(tidycensus)
 library(tidyverse)
 library(ggtext)
 library(glue)
+library(leaflet)
+library(mapview)
 
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 ```
@@ -91,8 +93,8 @@ ggplot(property_summary_plot, aes(x = distance_to_highway, y = sale_price.x, col
        subtitle = glue("<span style='color:#1a9988;'>South Side</span> vs. <span style='color:#eb5600;'>North Side</span>"),
        # caption = "Figure 4.1",
        # x = "South Side of the Highway          I-676                                     North Side of the Highway",
-       x = "Distance to the Highyway (m)                         ",
-       y = "Sale Price") +
+       x = "Distance to the Highyway (ft)                          ",
+       y = "Sale Price ($)") +
     geom_label(aes(x = 0, y = 750000,
                  label = "I-676"),
              fill = "black", color = "white", fontface = "bold", size = 5)
@@ -172,10 +174,128 @@ ggplot(data = prop500_plot,
   theme_minimal()
 ```
 
-# Basic Geography (Modify)
+# Use Case
 
-```{r}
+```{r quiet = TRUE, results = 'hide'}
+studyarea <- st_read("Dataset/studyarea/StudyArea.shp") %>%
+  st_transform('EPSG:2272')
 
+studyarea_4326 <- st_transform(studyarea, crs = 4326)
+bbox <- as.list(st_bbox(studyarea_4326))
+
+ChinatownStitch_4326 <- st_read("Dataset/Chinatown_Stitch/Chinatown_Stitch.shp") %>%
+  st_transform('EPSG:4326')
+
+I676_4326 <- st_transform(I_676, crs = 4326)
+
+landuse_4326 <- st_read("Dataset/landuse_clip/Land_Use_ClipLayer.shp") %>%
+  st_transform('EPSG:4326')
+
+landuse_4326_plot <- landuse_4326 %>%
+  filter(C_DIG2DESC != 51 & C_DIG2DESC != 71)
+
+landuse_park <- landuse_4326 %>%
+  filter(C_DIG2DESC == 71)
+
+landuse_park_ing <- landuse_4326 %>%
+  filter(OBJECTID_1 == 514214)
+
+nhoods_4326 <- 
+  st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>%
+  st_transform('EPSG:4326')
+
+Chinatown_Callowhill <- nhoods_4326 %>%
+  filter(NAME %in% c("CHINATOWN", "CALLOWHILL"))
 ```
 
+
+```{r}
+UseCase <- leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(data = studyarea_4326,
+              color = "black",       # Black border
+              weight = 4,            # Border thickness
+              dashArray = "8,12",     # Dashed line pattern (5px on, 5px off)
+              fill = FALSE) %>%
+    addPolygons(data = landuse_4326_plot,
+              color = "grey",
+              weight = 0.8,
+              fillColor = "#DFF3E3",
+              fillOpacity = 0.4) %>%
+  addPolygons(data = Chinatown_Callowhill,
+              color = "#eb5600",
+              weight = 1,
+              opacity = 0.5,
+              dashArray = "5,5",
+              fillColor = "#eb5600",
+              fillOpacity = 0.1) %>%
+  addPolygons(data = landuse_park,
+              color = "#1a9988",
+              weight = 1,
+              fillOpacity = 0.6,
+              fillColor = "#1a9988") %>%
+  addPolygons(data = landuse_park_ing,
+              color = "#1a9988",
+              weight = 2,
+              opacity = 0.8,
+              fill = FALSE) %>%
+  addPolylines(data = I676_4326,
+               color = "#eb5600",
+               opacity = 1,
+               weight = 2) %>%
+  addPolygons(data = ChinatownStitch_4326,
+              color = "#eb5600",
+              weight = 2,
+              opacity = 1,
+              fillColor = "#1a9988",
+              fillOpacity = 0.8
+              # fill = alpha("#1a9988", 0.5)
+              ) %>%
+  fitBounds(
+    lng1 = bbox$xmin, 
+    lat1 = bbox$ymin, 
+    lng2 = bbox$xmax, 
+    lat2 = bbox$ymax
+  )
+UseCase
+```
+
+
+# Basic Geography: potential lands
+
+```{r quiet = TRUE, results = 'hide'}
+landuse <- st_read("Dataset/landuse_clip/Land_Use_ClipLayer.shp") %>%
+  st_transform('EPSG:2272')
+
+discontinuity <- st_read("Dataset/studyarea-sub/discontinuity.shp") %>%
+  st_transform('EPSG:2272')
+
+Chinatown_Stitch <- st_read("Dataset/Chinatown_Stitch/Chinatown_Stitch.shp") %>%
+  st_transform('EPSG:2272')
+
+property_vacant <- property_EDA %>%
+  filter(category_code_description %in% c("VACANT LAND","SINGLE FAMILY", "VACANT LAND - NON-RESIDENTIAL")) %>%
+  mutate(category_code_description = case_when(
+    category_code_description == "VACANT LAND - NON-RESIDENTIAL" ~ "VACANT LAND",
+    TRUE ~ category_code_description
+  ))
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = landuse, fill = "white", color = "gray85", size = 0.05) +
+  geom_sf(data = studyarea, fill = "transparent", color = "grey", linetype = "dashed", linewidth = 2) +
+  geom_sf(data = discontinuity, fill = "#eb5600", color = "transparent") +
+  geom_sf(data = Chinatown_Stitch, fill = "#1a9988", alpha = 0.8) +
+  geom_sf(data = property_vacant, aes(color = category_code_description), size = 1) +
+  scale_colour_manual(values = c("black", "#B67352")) +
+  labs(title="Potential Lands",
+       subtitle = glue("<span style='color:#1a1a1a;'>Single Family & </span><span style='color:#B67352;'>Vacant Land</span>"),
+       # caption = "Figure "
+       ) +
+  theme_void() +
+  theme(legend.position = "none",
+        plot.title = element_text(size = 18, face = "bold"),
+        plot.subtitle = ggtext::element_markdown(size = 12))
+```
 
