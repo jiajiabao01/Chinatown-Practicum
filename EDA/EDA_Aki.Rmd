@@ -220,51 +220,7 @@ calculate_nearest_distance <- function(set_points, other_layer) {
 
 ```
 
-The following code chunk took too much to load (too many properties to consider), so I'm going to limit it to the properties within 500m from highways to look at the immediate effects of highways on property prices.
-
-```{r dist_highway}
-# calculate each property's distance to highways of interest
-# properties1 <- philly_properties %>% 
-#   mutate(dist_to_US001 = calculate_nearest_distance(geometry, 
-#                                      philly_mainhighways %>% 
-#                                        filter(ST_RT_NO == "0001")),
-#          dist_to_I076 = calculate_nearest_distance(geometry, 
-#                                     philly_mainhighways %>% 
-#                                       filter(ST_RT_NO == "0076")),
-#          dist_to_I095 = calculate_nearest_distance(geometry,
-#                                     philly_mainhighways %>% 
-#                                       filter(ST_RT_NO == "0095")),
-#          dist_to_I676 = calculate_nearest_distance(geometry, 
-#                                     philly_mainhighways %>%
-#                                       filter(ST_RT_NO == "0676")))
-# 
-# # create column that specifies which highway is closest and what the actual distance is
-# 
-# # find closest highway
-# properties2 <- properties1 %>% 
-#   select(matches("objectid|dist_to")) %>% 
-#   pivot_longer(cols = 2:5,
-#                names_to = "highway",
-#                values_to = "distance") %>% 
-#   group_by(objectid) %>% 
-#   summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>% 
-#   ungroup()
-# 
-# # join closest highway
-# properties3 <- left_join(properties1, 
-#                          properties2 %>% st_drop_geometry(), 
-#                          by = "objectid") %>% 
-#   mutate(closest_highway = case_when(
-#            dist_to_closest_highway == dist_to_US001 ~ "US-1",
-#            dist_to_closest_highway == dist_to_I076 ~ "I-76",
-#            dist_to_closest_highway == dist_to_I095 ~ "I-95",
-#            dist_to_closest_highway == dist_to_I676 ~ "I-676",
-#            .default = NA))
-
-# save file
-# st_write(properties3, "data/philly_properties_dist_highway.geojson")
-
-```
+The following code chunk took too much to load (too many properties to consider), so I'm going to limit it to the properties within 500m (and possibly look at 1000m and 1500m) from highways to look at the immediate effects of highways on property prices.
 
 ```{r highwaybuffer}
 # only keep properties that are within 500m (1640.42 ft) of highways of interest
@@ -433,7 +389,9 @@ ggplot(data = properties500_clean) +
                  bins = 100)
 
 ```
-```{r mpas_prop500}
+
+
+```{r maps_prop500}
 # map of properties within 500 m of highway, colored by sale_price
 ggplot() +
   geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
@@ -537,15 +495,88 @@ ggplot() +
 
 ```
 
+Calculate each property's distance to highways.
+
+```{r calc_dist2highway}
+# calculate each property's distance to highways of interest
+start_time <- Sys.time()
+prop500 <- properties500_clean %>% 
+  select(matches("assessment_date|building_code|category_code|census_tract|geographic|zip|market_value|parcel|sale_|taxable|_area|year_built|objectid|geometry|price")) %>% 
+  mutate(dist_to_US001 = calculate_nearest_distance(geometry,
+                                     philly_mainhighways %>%
+                                       filter(ST_RT_NO == "0001")),
+         dist_to_I076 = calculate_nearest_distance(geometry,
+                                    philly_mainhighways %>%
+                                      filter(ST_RT_NO == "0076")),
+         dist_to_I095 = calculate_nearest_distance(geometry,
+                                    philly_mainhighways %>%
+                                      filter(ST_RT_NO == "0095")),
+         dist_to_I676 = calculate_nearest_distance(geometry,
+                                    philly_mainhighways %>%
+                                      filter(ST_RT_NO == "0676"))) # Time difference of 55.20697 secs
+
+# find closest highway
+prop500_closest <- prop500 %>%
+  select(matches("objectid|dist_to")) %>%
+  pivot_longer(cols = 2:5,
+               names_to = "highway",
+               values_to = "distance") %>%
+  group_by(objectid) %>%
+  summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>%
+  ungroup() # Time difference of 1.736099 mins
+
+# join closest highway
+prop500 <- left_join(prop500,
+                     prop500_closest %>% st_drop_geometry(),
+                     by = "objectid") %>%
+  mutate(closest_highway = case_when(
+    dist_to_closest_highway == dist_to_US001 ~ "US-1",
+    dist_to_closest_highway == dist_to_I076 ~ "I-76",
+    dist_to_closest_highway == dist_to_I095 ~ "I-95",
+    dist_to_closest_highway == dist_to_I676 ~ "I-676",
+    .default = NA))
+
+# save file
+# st_write(prop500, "/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_prop500_dist2highway.geojson")
+
+# read in pre-saved file
+prop500_new <- st_read("/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/phl_properties_dist2highway/philly_prop500_dist2highway.geojson")
+
+```
+
+
+```{r dist_highway}
+
+# # create column that specifies which highway is closest and what the actual distance is
+# 
+
+# join closest highway
+properties3 <- left_join(properties1,
+                         properties2 %>% st_drop_geometry(),
+                         by = "objectid") %>%
+  mutate(closest_highway = case_when(
+           dist_to_closest_highway == dist_to_US001 ~ "US-1",
+           dist_to_closest_highway == dist_to_I076 ~ "I-76",
+           dist_to_closest_highway == dist_to_I095 ~ "I-95",
+           dist_to_closest_highway == dist_to_I676 ~ "I-676",
+           .default = NA))
+
+# save file
+# st_write(properties3, "data/philly_properties_dist_highway.geojson")
+
+```
+
+
+
 ```{r price_dist2highway}
 # simple scatter of price and dist2closesthighway
-# ggplot(data = properties3) +
-#   geom_point(aes(x = dist_to_closest_highway, y = sale_price, color = closest_highway))
-# 
-# # simple regression
-# fit1 <- lm(sale_price ~ dist_to_closest_highway, data = properties3)
-# 
-# summary(fit1)
+ggplot(data = properties3) +
+  geom_point(aes(x = dist_to_closest_highway, y = sale_price, color = closest_highway))
+
+# simple regression
+fit1 <- lm(sale_price ~ dist_to_closest_highway, data = properties3)
+
+summary(fit1)
 
 # 
 
