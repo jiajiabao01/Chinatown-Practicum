@@ -57,7 +57,7 @@ hydro <- st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/servi
 # st_write(stateroads_inphilly,
 #          "data/PhillyStateRoads.shp")
 
-# read in pre-filtered stateroads data
+# read in pre-filte#1a9988 stateroads data
 stateroads_inphilly <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/PhillyStateRoads.shp")
 
 philly_mainhighways <- stateroads_inphilly %>%
@@ -144,10 +144,10 @@ ggplot() +
           aes(color = ST_RT_NO)) +
   
   # add custom colors
-  scale_color_manual(values = c("0001" = "red",
-                                "0076" = "blue",
-                                "0095" = "purple",
-                                "0676" = "pink")) +
+  scale_color_manual(values = c("0001" = "#1a9988",
+                                "0076" = "#eb5600",
+                                "0095" = "#7fe3d6",
+                                "0676" = "#eba075")) +
   
   labs(title = "Case Study of Highways in Philly",
        subtitle = "US-1, I-76, I-95, and I-676",
@@ -176,7 +176,7 @@ ggplot() +
 ggplot() +
   geom_sf(data = philly_bounds, fill = "#b39624") + 
   geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
-  geom_sf(data = libraries, color = "blue4") # point data
+  geom_sf(data = libraries, color = "#eb5600") # point data
 
 # transit / looking at what this category actually consists of....
 # looks like there's point geography for parking lots, some random transit stops, and heli pad station
@@ -185,12 +185,12 @@ ggplot() +
   geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
   geom_sf(data = facilities %>% 
             filter(ASSET_GROUP1 == "A17",
-                   grepl("Parking", ASSET_SUBT1_DESC)), color = "pink1") # point data
+                   grepl("Parking", ASSET_SUBT1_DESC)), color = "pink") # point data
 
 ggplot() +
   geom_sf(data = philly_bounds, fill = "#b39624") + 
   geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
-  geom_sf(data = sijia_eda, color = "purple3")
+  geom_sf(data = sijia_eda, color = "#7fe3d6")
 
 # prison facilities
 ggplot() +
@@ -254,10 +254,10 @@ ggplot() +
           aes(color = ST_RT_NO)) +
   
   # add custom colors
-  scale_color_manual(values = c("0001" = "red",
-                                "0076" = "blue",
-                                "0095" = "purple",
-                                "0676" = "pink")) +
+  scale_color_manual(values = c("0001" = "#1a9988",
+                                "0076" = "#eb5600",
+                                "0095" = "#7fe3d6",
+                                "0676" = "#eba075")) +
   
   labs(title = "Case Study of Highways in Philly",
        subtitle = "US-1, I-76, I-95, and I-676",
@@ -278,10 +278,10 @@ ggplot() +
           aes(color = ST_RT_NO)) +
   
   # add custom colors
-  scale_color_manual(values = c("0001" = "red",
-                                "0076" = "blue",
-                                "0095" = "purple",
-                                "0676" = "pink")) +
+  scale_color_manual(values = c("0001" = "#1a9988",
+                                "0076" = "#eb5600",
+                                "0095" = "#7fe3d6",
+                                "0676" = "#eba075")) +
   
   labs(title = "Properties within 500m of Highways in Philly",
        subtitle = "US-1, I-76, I-95, and I-676",
@@ -301,10 +301,10 @@ ggplot() +
           aes(color = ST_RT_NO)) +
   
   # add custom colors
-  scale_color_manual(values = c("0001" = "red",
-                                "0076" = "blue",
-                                "0095" = "purple",
-                                "0676" = "pink")) +
+  scale_color_manual(values = c("0001" = "#1a9988",
+                                "0076" = "#eb5600",
+                                "0095" = "#7fe3d6",
+                                "0676" = "#eba075")) +
   
   labs(title = "Properties within 1000m of Highways in Philly",
        subtitle = "US-1, I-76, I-95, and I-676",
@@ -324,10 +324,10 @@ ggplot() +
           aes(color = ST_RT_NO)) +
   
   # add custom colors
-  scale_color_manual(values = c("0001" = "red",
-                                "0076" = "blue",
-                                "0095" = "purple",
-                                "0676" = "pink")) +
+  scale_color_manual(values = c("0001" = "#1a9988",
+                                "0076" = "#eb5600",
+                                "0095" = "#7fe3d6",
+                                "0676" = "#eba075")) +
   
   labs(title = "Properties within 1500m of Highways in Philly",
        subtitle = "US-1, I-76, I-95, and I-676",
@@ -347,7 +347,7 @@ summary(properties500$sale_price)
 #   0        10     89900    327917    230000 342000000       840 
 
 # only keep properties whose sale_price >= $10,000
-# according to redfin, the most expensive house in philadelphia right now is $25,000,000 -- using that as a cutoff
+# according to #1a9988fin, the most expensive house in philadelphia right now is $25,000,000 -- using that as a cutoff
 properties500_clean <- properties500 %>% 
   filter(sale_price >= 10000,
          sale_price <= 25000000,
@@ -392,7 +392,7 @@ ggplot(data = properties500_clean) +
 
 
 ```{r maps_prop500}
-# map of properties within 500 m of highway, colored by sale_price
+# map of properties within 500 m of highway, colo#1a9988 by sale_price
 ggplot() +
   geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
   geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
@@ -407,7 +407,7 @@ ggplot() +
        subtitle = "US-1, I-76, I-95, and I-676") +
   theme_void()
 
-# map of properties within 500 m of highway, colored by sale_price
+# map of properties within 500 m of highway, colo#1a9988 by sale_price
 ggplot() +
   geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
   geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
@@ -514,7 +514,11 @@ prop500 <- properties500_clean %>%
                                       filter(ST_RT_NO == "0095")),
          dist_to_I676 = calculate_nearest_distance(geometry,
                                     philly_mainhighways %>%
-                                      filter(ST_RT_NO == "0676"))) # Time difference of 55.20697 secs
+                                      filter(ST_RT_NO == "0676")),
+         dist_to_US001m = dist_to_US001 * 0.3048,
+         dist_to_I076m = dist_to_I076 * 0.3048,
+         dist_to_I095m = dist_to_I095 * 0.3048,
+         dist_to_I676m = dist_to_I676 * 0.3048) # Time difference of 55.20697 secs
 
 # find closest highway
 prop500_closest <- prop500 %>%
@@ -535,7 +539,10 @@ prop500 <- left_join(prop500,
     dist_to_closest_highway == dist_to_I076 ~ "I-76",
     dist_to_closest_highway == dist_to_I095 ~ "I-95",
     dist_to_closest_highway == dist_to_I676 ~ "I-676",
-    .default = NA))
+    .default = NA),
+    highway_type = case_when(closest_highway %in% c("US-1","I-676") ~ "through neighborhood",
+                             closest_highway %in% c("I-95","I-76") ~ "along waterway",
+                             .default = NA))
 
 # save file
 # st_write(prop500, "/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_prop500_dist2highway.geojson")
@@ -548,7 +555,7 @@ prop500 <- left_join(prop500,
 Now, look at relationship between distance to highway and price.
 
 ```{r price_dist2highway}
-# map of properties within 500m of highway colored by which highway they're closest to
+# map of properties within 500m of highway colo#1a9988 by which highway they're closest to
 ggplot() +
   geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
   geom_sf(data = hydro, fill = "#96dbe3", color = "transparent") +
@@ -561,10 +568,10 @@ ggplot() +
           color = "black") +
   
   # add custom colors
-  scale_color_manual(values = c("US-1" = "red",
-                                "I-76" = "blue",
-                                "I-95" = "purple",
-                                "I-676" = "pink")) +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#7fe3d6",
+                                "I-676" = "#eba075")) +
   
   labs(title = "Properties within 500m of Highways in Philly",
        subtitle = "US-1, I-76, I-95, and I-676") +
@@ -576,14 +583,14 @@ ggplot(data = prop500,
            color = closest_highway, fill = closest_highway)) +
   geom_point(alpha = .2) +
   geom_smooth(method = "lm") +
-  scale_color_manual(values = c("US-1" = "red",
-                                "I-76" = "blue",
-                                "I-95" = "purple",
-                                "I-676" = "pink")) +
-  scale_fill_manual(values = c("US-1" = "red",
-                               "I-76" = "blue",
-                               "I-95" = "purple",
-                               "I-676" = "pink")) +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#7fe3d6",
+                                "I-676" = "#eba075")) +
+  scale_fill_manual(values = c("US-1" = "#1a9988",
+                               "I-76" = "#eb5600",
+                               "I-95" = "#7fe3d6",
+                               "I-676" = "#eba075")) +
   labs(title = "Property Price as a function of Distance to Closest Highway",
        subtitle = "Colored by Closest Highway; Properties within 500m of highways",
        fill = "Closest Highway",
@@ -594,16 +601,16 @@ ggplot(data = prop500,
 ggplot(data = prop500, 
        aes(x = dist_to_closest_highway, y = log_price_perTA, 
            color = closest_highway, fill = closest_highway)) +
-  geom_point(alpha = .2) +
-  geom_smooth(method = "lm") +
-  scale_color_manual(values = c("US-1" = "red",
-                                "I-76" = "blue",
-                                "I-95" = "purple",
-                                "I-676" = "pink")) +
-  scale_fill_manual(values = c("US-1" = "red",
-                               "I-76" = "blue",
-                               "I-95" = "purple",
-                               "I-676" = "pink")) +
+  geom_point(alpha = .2, size = 0.3) +
+  geom_smooth(method = "lm", size = 1.2) +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#7fe3d6",
+                                "I-676" = "#eba075")) +
+  scale_fill_manual(values = c("US-1" = "#1a9988",
+                               "I-76" = "#eb5600",
+                               "I-95" = "#7fe3d6",
+                               "I-676" = "#eba075")) +
   labs(title = "Property Price (log price per TA) as a function of Distance to Closest Highway",
        subtitle = "Colored by Closest Highway; Properties within 500m of highways",
        fill = "Closest Highway",
@@ -615,9 +622,159 @@ fit1 <- lm(log_price_perTA ~ dist_to_closest_highway, data = prop500)
 
 summary(fit1)
 
-# 
+# multiple regression of price (log_price_perTA) and dist2closesthighway but adding highway type (4 types)
+fit2 <- lm(log_price_perTA ~ dist_to_closest_highway + closest_highway, data = prop500)
+
+summary(fit2)
+
+# multiple regression of price (log_price_perTA) and dist2closesthighway but adding highway type (4 types) with interaction
+fit3 <- lm(log_price_perTA ~ dist_to_closest_highway + closest_highway + dist_to_closest_highway*closest_highway, data = prop500)
+
+summary(fit3)
+
+# multiple regression of price (log_price_perTA) and dist2closesthighway but adding highway type (2 types)
+fit4 <- lm(log_price_perTA ~ dist_to_closest_highway + highway_type, data = prop500)
+
+summary(fit4)
+
+# multiple regression of price (log_price_perTA) and dist2closesthighway but adding highway type (2 types) with interaction
+fit5 <- lm(log_price_perTA ~ dist_to_closest_highway + highway_type + dist_to_closest_highway*highway_type, data = prop500)
+
+summary(fit5)
+
 
 ```
+
+Visualizing the highway types (cutting through neighborhoods vs running alongside water).
+```{r price_dist2highway_2types}
+
+# simple scatter of price and dist2closesthighway
+ggplot(data = prop500, 
+       aes(x = dist_to_closest_highway, y = sale_price, 
+           color = highway_type, fill = highway_type)) +
+  geom_point(alpha = .2, size = 0.3) +
+  geom_smooth(method = "lm") +
+  scale_color_manual(values = c("through neighborhood" = "#1a9988",
+                                "along waterway" = "#eb5600")) +
+  scale_fill_manual(values = c("through neighborhood" = "#1a9988",
+                               "along waterway" = "#eb5600")) +
+  labs(title = "Property Price as a function of Distance to Highway Type",
+       subtitle = "Colored by Highway Type; Properties within 500m of highways",
+       fill = "Highway Type",
+       color = "Highway Type") +
+  theme_minimal()
+
+# simple scatter of price and dist2closesthighway with loess method
+ggplot(data = prop500, 
+       aes(x = dist_to_closest_highway, y = sale_price, 
+           color = highway_type, fill = highway_type)) +
+  geom_point(alpha = .2, size = 0.3) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  scale_color_manual(values = c("through neighborhood" = "#1a9988",
+                                "along waterway" = "#eb5600")) +
+  scale_fill_manual(values = c("through neighborhood" = "#1a9988",
+                               "along waterway" = "#eb5600")) +
+  labs(title = "Property Price as a function of Distance to Highway Type",
+       subtitle = "Colored by Highway Type; Properties within 500m of highways",
+       fill = "Highway Type",
+       color = "Highway Type") +
+  theme_minimal()
+
+# simple scatter of price (as log price per total area in sq ft) and dist2closesthighway
+ggplot(data = prop500, 
+       aes(x = dist_to_closest_highway, y = log_price_perTA, 
+           color = highway_type, fill = highway_type)) +
+  geom_point(alpha = .2, size = 0.3) +
+  geom_smooth(method = "lm", size = 1.2) +
+  scale_color_manual(values = c("through neighborhood" = "#1a9988",
+                                "along waterway" = "#eb5600")) +
+  scale_fill_manual(values = c("through neighborhood" = "#1a9988",
+                               "along waterway" = "#eb5600")) +
+  labs(title = "Property Price (log price per TA) as a function of Distance to Highway Type",
+       subtitle = "Colored by Highway Type; Properties within 500m of highways",
+       fill = "Highway Type",
+       color = "Highway Type") +
+  theme_minimal()
+
+# correlations
+prop500 %>%
+  st_drop_geometry() %>%
+  group_by(highway_type) %>%
+  summarize(correlation = cor(dist_to_closest_highway, log_price_perTA, method = "pearson"), .groups = "drop")
+
+```
+
+
+
+Limiting the properties further to those under $1mil
+
+```{r quiet = TRUE, results = 'hide'}
+prop500_under1m <- prop500 %>%
+  filter(sale_price < 1e6)
+```
+
+```{r}
+ggplot(data = prop500_under1m, 
+       aes(x = dist_to_closest_highway, y = sale_price, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .1, size = 0.3) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#7fe3d6",
+                                "I-676" = "#eba075")) +
+  scale_fill_manual(values = c("US-1" = "#1a9988",
+                               "I-76" = "#eb5600",
+                               "I-95" = "#7fe3d6",
+                               "I-676" = "#eba075")) +
+  labs(title = "Property Price (under $1M) as a function of Distance to Closest Highway",
+       subtitle = "Colored by Closest Highway; Properties within 500m of highways",
+       fill = "Closest Highway",
+       color = "Closest Highway") +
+  theme_minimal()
+```
+
+```{r cor_under1M}
+# correlation of price and dist to highway for each highway
+cor <- prop500_under1m %>%
+  st_drop_geometry() %>%
+  group_by(closest_highway) %>%
+  summarize(correlation = cor(dist_to_closest_highway, log_price_perTA, method = "pearson"), .groups = "drop")
+cor
+
+# correlation of price and dist to closest highway
+prop500_under1m %>%
+  st_drop_geometry() %>%
+  summarize(correlation = cor(dist_to_closest_highway, log_price_perTA, method = "pearson"), .groups = "drop")
+
+```
+
+```{r}
+# simple scatter of price (as log price per total area in sq ft) and dist2closesthighway
+ggplot(data = prop500_under1m, 
+       aes(x = dist_to_closest_highway, y = log_price_perTA, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .1, size = 0.3) +
+  geom_smooth(method = "lm", se=F, size = 1.2) +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#7fe3d6",
+                                "I-676" = "#eba075")) +
+  scale_fill_manual(values = c("US-1" = "#1a9988",
+                               "I-76" = "#eb5600",
+                               "I-95" = "#7fe3d6",
+                               "I-676" = "#eba075")) +
+  labs(title = "Property Price (log price per TA; under $1M) as a function of Distance to Closest Highway",
+       subtitle = "Colored by Closest Highway; Properties within 500m of highways",
+       fill = "Closest Highway",
+       color = "Closest Highway") +
+  theme_minimal()
+```
+
+## Properties within 1000m of Highways
+
+
+
 
 
 # Relationship between Housing Price and other variables
