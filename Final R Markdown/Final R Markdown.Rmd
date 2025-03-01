@@ -1,0 +1,71 @@
+---
+title: "Envisioning Neighborhood Futures After the Chinatown Stitch"
+author: "Aki Di Sandro, Ray Ma, Luming Xu, Sijia Zhang, Yixuan Zhou"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+    theme: sandstone
+    toc_float: true
+    code_folding: hide
+    toc_depth: 3
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
+    fig.align = "center") 
+options(scipen=999)
+
+library(sf)
+library(ggplot2)
+```
+
+```{r wd_setup}
+# Change to your own workspace
+knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
+wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
+```
+
+
+# Use Case
+
+## Background
+
+(insert pictures)
+
+## Study Area
+
++ Philadelphia (case studies)
++ (3 block groups)
++ 2 sub areas
+
+## Methodology
+
+![Methodology](Images/methodology.png)
+
+# Data Wrangling
+
+## Property Data
+
++ [Philadelphia Properties and Assessment History](https://opendataphilly.org/datasets/philadelphia-properties-and-assessment-history/)
+
+## Census Data
+
+## Neighborhood Context
+
++ [PPR Properties](https://opendataphilly.org/datasets/ppr-properties/)
+
+## Social Survey
+
+## POI Data
+
+# Exploratory Data Analysis
+
+## Basic Geography
+
+##
+
