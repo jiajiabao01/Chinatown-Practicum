@@ -18,6 +18,8 @@ This repository documents the data analysis part of the project. Our outcomes wi
 2. **A regression discontinuity model** to analyze the quantitative difference in the disamenity effect of the highway between the southern and northern halves of Chinatown;
 3. **A predictive model** to estimate the housing market after the completion of Phase 1 of the Chinatown Stitch project.
 
+![*Methodology*](Final%20R%20Markdown/Images/methodology.png)
+
 ## Analysis Schedule (Update Weekly)
 
 |  W#  |  Date  |  Content  |
@@ -28,7 +30,7 @@ This repository documents the data analysis part of the project. Our outcomes wi
 |  4   |  Feb 11   |  _Data Wrangling_: finish wrangling the relevant factors and connect to the property data |
 |  5   |  Feb 18  |  _Exploratory Analysis_: finish basic geography, highway effect analysis, and case studies of Philly  |
 |  6   |  Feb 25  |  1st Presentation  |
-|  7   |  Mar 4   |  _Modeling_:   |
+|  7   |  Mar 4   |  _Exploratory Analysis_: case studies of amenities, feature engineering, and r markdown  |
 |  -   |  Mar 11   |  **-(SPRING BREAK)-**  |
 |  8   |  Mar 18  |  _Modeling_:   |
 |  9   |  Mar 25  |  _Modeling_:   |
