@@ -45,7 +45,7 @@ wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
 
 ## Methodology
 
-![Methodology](Images/methodology.png)
+![*Methodology*](Images/methodology.png)
 
 # Data Wrangling
 
@@ -67,5 +67,20 @@ wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
 
 ## Basic Geography
 
-##
+## Sales Price Change
 
+## Discontinuity Effects
+
+## Case Studies
+
+## Feature Engineering
+
+### Continuous Features
+
+### Categorical Features
+
+### Summary of Features
+
+
+
+# Predictive Modeling
