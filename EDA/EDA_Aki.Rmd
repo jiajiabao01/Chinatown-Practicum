@@ -5,6 +5,7 @@ date: "`r Sys.Date()`"
 output:
   html_document:
     code_folding: hide
+    toc_float: true
 ---
 
 ```{r r-setup, results='hide', echo = F, eval = T, warning = F, message = F}
@@ -30,7 +31,7 @@ census_api_key("f2855a6037284cb9cbed55e96e6b99be17ee05c6", overwrite = TRUE, ins
 # options(rdeck.mapbox_access_token = "pk.eyJ1IjoiY2hpYmlha2kiLCJhIjoiY20xODh2NTNqMTBvaDJqb2ptbjM4ZGViayJ9.un9M1_-S6kI8M0ktqZLz_Q")
 
 # google API
-
+google_api <- colnames(read.delim("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/google_api_aki.txt"))
 
 ```
 
@@ -153,6 +154,12 @@ luming_property <- read.csv("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinat
 
 # checking out what property_sijia_eda.geojson looks like
 sijia_eda <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/property_sijia_eda.geojson")
+
+# google API to get restaurant data
+# incomplete, will figure this out later
+# restaurant_results <- google_places(search_string = paste(search_terms, city, sep = " "), 
+#                                     key = google_api)
+
 
 ```
 
@@ -1110,619 +1117,1163 @@ ggplot(data = prop500_under1m,
 
 
 
-
-## Properties within 1000m of Highways
-
-
-```{r clean_prop1000}
-# starting with 1000m buffer
-# need to check if there are 0 values in sale_price before log transforming
-summary(properties1000$sale_price)
-# Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's
-#    0        10     82000    290902    220000 360000000      1438
-
-# only keep properties whose sale_price >= $10,000
-# according to redfin, the most expensive house in philadelphia right now is $25,000,000 -- using that as a cutoff
-properties1000_clean <- properties1000 %>% 
-  filter(sale_price >= 10000,
-         sale_price <= 210000000,
-         total_area >= 100,
-         total_livable_area >= 100) %>% 
-  mutate(price_perTLA = sale_price / total_livable_area,
-         price_perTA = sale_price / total_area,
-         log_price = log(sale_price),
-         log_price_perTLA = log(price_perTLA),
-         log_price_perTA = log(price_perTA),
-         norm_log_price = scale(log_price),
-         norm_log_price_perTLA = scale(log_price_perTLA),
-         norm_log_price_perTA = scale(log_price_perTA))
-
-summary(properties1000_clean$sale_price)
-#  Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-# 10000     62000    130000    325060    250000 210000000
-summary(properties1000_clean$price_perTLA)
-# Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-# 0.09     47.45     97.37    145.52    176.37 135309.28
-summary(properties1000_clean$price_perTA)
-# Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-# 0.04     38.88     76.92    179.61    169.17 137452.11
-
-# correlations between total_area and total_livable_area, and sale_price
-# cor(properties1000_clean$total_area, properties1000_clean$total_livable_area, use = "pairwise.complete.obs") # 0.1925543 -- why is this so low?
-# cor(properties1000_clean$total_area, properties1000_clean$sale_price, use = "pairwise.complete.obs") # 0.2211627
-# cor(properties1000_clean$total_livable_area, properties1000_clean$sale_price, use = "pairwise.complete.obs") # 0.3834926
-
-# histogram of sale_price
-ggplot(data = properties1000_clean) +
-  geom_histogram(aes(x = sale_price),
-                 bins = 100)
-
-ggplot(data = properties1000_clean) +
-  geom_histogram(aes(x = price_perTA),
-                 bins = 100)
-
-ggplot(data = properties1000_clean) +
-  geom_histogram(aes(x = price_perTLA),
-                 bins = 100)
-
-```
-
-
-```{r calc_dist2highway1000}
-# calculate each property's distance to highways of interest
-# distance is in feet
-start_time <- Sys.time()
-prop1000 <- properties1000_clean %>% 
-  select(matches("assessment_date|building_code|category_code|census_tract|geographic|zip|market_value|parcel|sale_|taxable|_area|year_built|objectid|geometry|price")) %>% 
-  mutate(dist_to_US001 = calculate_nearest_distance(geometry,
-                                     philly_mainhighways %>%
-                                       filter(ST_RT_NO == "0001")),
-         dist_to_I076 = calculate_nearest_distance(geometry,
-                                    philly_mainhighways %>%
-                                      filter(ST_RT_NO == "0076")),
-         dist_to_I095 = calculate_nearest_distance(geometry,
-                                    philly_mainhighways %>%
-                                      filter(ST_RT_NO == "0095")),
-         dist_to_I676 = calculate_nearest_distance(geometry,
-                                    philly_mainhighways %>%
-                                      filter(ST_RT_NO == "0676")),
-         dist_to_US001m = dist_to_US001 * 0.3048,
-         dist_to_I076m = dist_to_I076 * 0.3048,
-         dist_to_I095m = dist_to_I095 * 0.3048,
-         dist_to_I676m = dist_to_I676 * 0.3048)
-
-# find closest highway
-prop1000_closest <- prop1000 %>%
-  select(matches("objectid|dist_to")) %>%
-  pivot_longer(cols = 2:5,
-               names_to = "highway",
-               values_to = "distance") %>%
-  group_by(objectid) %>%
-  summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>%
-  ungroup() %>% 
-  mutate(dist_to_closest_highwaym = dist_to_closest_highway * 0.3048) 
-
-# join closest highway
-prop1000 <- left_join(prop1000,
-                     prop1000_closest %>% st_drop_geometry(),
-                     by = "objectid") %>%
-  mutate(closest_highway = case_when(
-    dist_to_closest_highway == dist_to_US001 ~ "US-1",
-    dist_to_closest_highway == dist_to_I076 ~ "I-76",
-    dist_to_closest_highway == dist_to_I095 ~ "I-95",
-    dist_to_closest_highway == dist_to_I676 ~ "I-676",
-    .default = NA),
-    highway_type = case_when(closest_highway %in% c("US-1","I-676") ~ "through neighborhood",
-                             closest_highway %in% c("I-95","I-76") ~ "along waterway",
-                             .default = NA))
-
-# save file
-# st_write(prop1000, "/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_prop1000_dist2highway.geojson")
-
-# read in pre-saved file
-# prop1000_new <- st_read("/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/data/philly_prop1000_dist2highway.geojson")
-
-```
-
-```{r initial_prop1000_plot}
-# map of properties within 1000m of highway cored by which highway they're closest to
-ggplot() +
-  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
-  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
-  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
-  geom_sf(data = highways_1000buffer,
-          color = "transparent", fill = "grey", alpha = 0.4) +
-  geom_sf(data = prop1000,
-          aes(color = closest_highway), size = 0.3) +
-  geom_sf(data = philly_mainhighways,
-          color = "black") +
-  
-  # add custom colors
-  scale_color_manual(values = c("US-1" = "#1a9988",
-                                "I-76" = "#eb5600",
-                                "I-95" = "#eba075",
-                                "I-676" = "#7fe3d6")) +
-  
-  labs(title = "Properties within 1000m of Highways in Philly",
-       subtitle = "US-1, I-76, I-95, and I-676") +
-  theme_void()
-
-# simple scatter of price and dist2closesthighway
-ggplot(data = prop1000, 
-       aes(x = dist_to_closest_highway, y = sale_price, 
-           color = closest_highway, fill = closest_highway)) +
-  geom_point(alpha = .2) +
-  geom_smooth(method = "lm") +
-  scale_color_manual(values = c("US-1" = "#1a9988",
-                                "I-76" = "#eb5600",
-                                "I-95" = "#eba075",
-                                "I-676" = "#7fe3d6")) +
-  scale_fill_manual(values = c("US-1" = "#1a9988",
-                               "I-76" = "#eb5600",
-                               "I-95" = "#eba075",
-                               "I-676" = "#7fe3d6")) +
-  labs(title = "Property Price as a function of Distance to Closest Highway",
-       subtitle = "Colored by Closest Highway; Properties within 1000m of highways",
-       fill = "Closest Highway",
-       color = "Closest Highway") +
-  theme_minimal()
-
-# simple scatter of price (as log price per total area in sq ft) and dist2closesthighway
-ggplot(data = prop1000, 
-       aes(x = dist_to_closest_highway, y = log_price_perTA, 
-           color = closest_highway, fill = closest_highway)) +
-  geom_point(alpha = .2, size = 0.3) +
-  geom_smooth(method = "lm", size = 1.2) +
-  scale_color_manual(values = c("US-1" = "#1a9988",
-                                "I-76" = "#eb5600",
-                                "I-95" = "#eba075",
-                                "I-676" = "#7fe3d6")) +
-  scale_fill_manual(values = c("US-1" = "#1a9988",
-                               "I-76" = "#eb5600",
-                               "I-95" = "#eba075",
-                               "I-676" = "#7fe3d6")) +
-  labs(title = "Property Price (log price per TA) as a function of Distance to Closest Highway",
-       subtitle = "Colored by Closest Highway; Properties within 1000m of highways",
-       fill = "Closest Highway",
-       color = "Closest Highway") +
-  theme_minimal()
-
-# simple regression of price (log_price_perTA) and dist2closesthighway
-fit1 <- lm(log_price_perTA ~ dist_to_closest_highway, data = prop1000)
-
-summary(fit1)
-
-# multiple regression of price (log_price_perTA) and dist2closesthighway but adding highway type (4 types)
-fit2 <- lm(log_price_perTA ~ dist_to_closest_highway + closest_highway, data = prop1000)
-
-summary(fit2)
-
-# multiple regression of price (log_price_perTA) and dist2closesthighway but adding highway type (4 types) with interaction
-fit3 <- lm(log_price_perTA ~ dist_to_closest_highway + closest_highway + dist_to_closest_highway*closest_highway, data = prop1000)
-
-summary(fit3)
-
-# multiple regression of price (log_price_perTA) and dist2closesthighway but adding highway type (2 types)
-fit4 <- lm(log_price_perTA ~ dist_to_closest_highway + highway_type, data = prop1000)
-
-summary(fit4)
-
-# multiple regression of price (log_price_perTA) and dist2closesthighway but adding highway type (2 types) with interaction
-fit5 <- lm(log_price_perTA ~ dist_to_closest_highway + highway_type + dist_to_closest_highway*highway_type, data = prop1000)
-
-summary(fit5)
-
-
-```
-
-Visualizing the highway types (cutting through neighborhoods vs running alongside water).
-```{r price_dist2highway_2types_prop1000}
-
-# simple scatter of price and dist2closesthighway
-ggplot(data = prop1000, 
-       aes(x = dist_to_closest_highway, y = sale_price, 
-           color = highway_type, fill = highway_type)) +
-  geom_point(alpha = .2, size = 0.3) +
-  geom_smooth(method = "lm") +
-  scale_color_manual(values = c("through neighborhood" = "#1a9988",
-                                "along waterway" = "#eb5600")) +
-  scale_fill_manual(values = c("through neighborhood" = "#1a9988",
-                               "along waterway" = "#eb5600")) +
-  labs(title = "Property Price as a function of Distance to Highway Type",
-       subtitle = "Colored by Highway Type; Properties within 1000m of highways",
-       fill = "Highway Type",
-       color = "Highway Type") +
-  theme_minimal()
-
-# simple scatter of price and dist2closesthighway with loess method
-ggplot(data = prop1000, 
-       aes(x = dist_to_closest_highway, y = sale_price, 
-           color = highway_type, fill = highway_type)) +
-  geom_point(alpha = .2, size = 0.3) +
-  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
-  scale_color_manual(values = c("through neighborhood" = "#1a9988",
-                                "along waterway" = "#eb5600")) +
-  scale_fill_manual(values = c("through neighborhood" = "#1a9988",
-                               "along waterway" = "#eb5600")) +
-  labs(title = "Property Price as a function of Distance to Highway Type",
-       subtitle = "Colored by Highway Type; Properties within 1000m of highways",
-       fill = "Highway Type",
-       color = "Highway Type") +
-  theme_minimal()
-
-# simple scatter of price (as log price per total area in sq ft) and dist2closesthighway
-ggplot(data = prop1000, 
-       aes(x = dist_to_closest_highway, y = log_price_perTA, 
-           color = highway_type, fill = highway_type)) +
-  geom_point(alpha = .2, size = 0.3) +
-  geom_smooth(method = "lm", size = 1.2) +
-  scale_color_manual(values = c("through neighborhood" = "#1a9988",
-                                "along waterway" = "#eb5600")) +
-  scale_fill_manual(values = c("through neighborhood" = "#1a9988",
-                               "along waterway" = "#eb5600")) +
-  labs(title = "Property Price (log price per TA) as a function of Distance to Highway Type",
-       subtitle = "Colored by Highway Type; Properties within 1000m of highways",
-       fill = "Highway Type",
-       color = "Highway Type") +
-  theme_minimal()
-
-# correlations
-prop1000 %>%
-  st_drop_geometry() %>%
-  group_by(highway_type) %>%
-  summarize(correlation = cor(dist_to_closest_highway, log_price_perTA, method = "pearson"), .groups = "drop")
-
-```
-
-
-
-Limiting the properties further to those under $1mil
-
-```{r quiet = TRUE, results = 'hide'}
-prop1000_under1m <- prop1000 %>%
-  filter(sale_price < 1e6)
-```
-
-```{r plot_prop1000under1m}
-ggplot(data = prop1000_under1m, 
-       aes(x = dist_to_closest_highway, y = sale_price, 
-           color = closest_highway, fill = closest_highway)) +
-  geom_point(alpha = .1, size = 0.3) +
-  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
-  scale_color_manual(values = c("US-1" = "#1a9988",
-                                "I-76" = "#eb5600",
-                                "I-95" = "#eba075",
-                                "I-676" = "#7fe3d6")) +
-  scale_fill_manual(values = c("US-1" = "#1a9988",
-                               "I-76" = "#eb5600",
-                               "I-95" = "#eba075",
-                               "I-676" = "#7fe3d6")) +
-  labs(title = "Property Price (under $1M) as a function of Distance to Closest Highway",
-       subtitle = "Colored by Closest Highway; Properties within 1000m of highways",
-       fill = "Closest Highway",
-       color = "Closest Highway") +
-  theme_minimal()
-
-# lm method of geom_smooth with log_price_perTA
-ggplot(data = prop1000_under1m, 
-       aes(x = dist_to_closest_highway, y = log_price_perTA, 
-           color = closest_highway, fill = closest_highway)) +
-  geom_point(alpha = .1, size = 0.3) +
-  geom_smooth(method = "lm", se = FALSE, size = 1.2) +
-  scale_color_manual(values = c("US-1" = "#1a9988",
-                                "I-76" = "#eb5600",
-                                "I-95" = "#eba075",
-                                "I-676" = "#7fe3d6")) +
-  scale_fill_manual(values = c("US-1" = "#1a9988",
-                               "I-76" = "#eb5600",
-                               "I-95" = "#eba075",
-                               "I-676" = "#7fe3d6")) +
-  labs(title = "Property Price (under $1M) as a function of Distance to Closest Highway",
-       subtitle = "Colored by Closest Highway; Properties within 1000m of highways",
-       fill = "Closest Highway",
-       color = "Closest Highway") +
-  theme_minimal()
-
-# lm method of geom_smooth with log_price_perTA + log_distance
-ggplot(data = prop1000_under1m, 
-       aes(x = log(dist_to_closest_highway), y = log_price_perTA, 
-           color = closest_highway, fill = closest_highway)) +
-  geom_point(alpha = .1, size = 0.3) +
-  geom_smooth(method = "lm", se = FALSE, size = 1.2) +
-  scale_color_manual(values = c("US-1" = "#1a9988",
-                                "I-76" = "#eb5600",
-                                "I-95" = "#eba075",
-                                "I-676" = "#7fe3d6")) +
-  scale_fill_manual(values = c("US-1" = "#1a9988",
-                               "I-76" = "#eb5600",
-                               "I-95" = "#eba075",
-                               "I-676" = "#7fe3d6")) +
-  labs(title = "Property Price (under $1M) as a function of Distance to Closest Highway",
-       subtitle = "Colored by Closest Highway; Properties within 1000m of highways",
-       fill = "Closest Highway",
-       color = "Closest Highway") +
-  theme_minimal()
-```
-
-```{r cor_under1M_prop1000}
-# correlation of price and dist to highway for each highway
-prop1000_under1m %>%
-  st_drop_geometry() %>%
-  group_by(closest_highway) %>%
-  summarize(correlation = cor(dist_to_closest_highway, log_price_perTA, method = "pearson"), .groups = "drop")
-
-# correlation of price and dist to closest highway
-prop1000_under1m %>%
-  st_drop_geometry() %>%
-  summarize(correlation = cor(dist_to_closest_highway, log_price_perTA, method = "pearson"), .groups = "drop")
-
-# same thing but with log(distance)
-prop1000_under1m %>%
-  st_drop_geometry() %>%
-  group_by(closest_highway) %>%
-  summarize(correlation = cor(log(dist_to_closest_highway), log_price_perTA, method = "pearson"), .groups = "drop")
-
-prop1000_under1m %>%
-  st_drop_geometry() %>%
-  summarize(correlation = cor(log(dist_to_closest_highway), log_price_perTA, method = "pearson"), .groups = "drop")
-
-```
-
-```{r}
-# simple scatter of price (as log price per total area in sq ft) and dist2closesthighway
-ggplot(data = prop1000_under1m, 
-       aes(x = dist_to_closest_highway, y = log_price_perTA, 
-           color = closest_highway, fill = closest_highway)) +
-  geom_point(alpha = .1, size = 0.3) +
-  geom_smooth(method = "lm", se = F, size = 1.2) +
-  scale_color_manual(values = c("US-1" = "#1a9988",
-                                "I-76" = "#eb5600",
-                                "I-95" = "#eba075",
-                                "I-676" = "#7fe3d6")) +
-  scale_fill_manual(values = c("US-1" = "#1a9988",
-                               "I-76" = "#eb5600",
-                               "I-95" = "#eba075",
-                               "I-676" = "#7fe3d6")) +
-  labs(title = "Property Price (log price per TA; under $1M) as a function of Distance to Closest Highway",
-       subtitle = "Colored by Closest Highway; Properties within 1000m of highways",
-       fill = "Closest Highway",
-       color = "Closest Highway") +
-  theme_minimal()
-```
-
-
-
-
-
 # Relationship between Housing Price and other variables
 
-Notably, I'm exploring the relationship between housing price and distance to highways, distance to parks, distance to commercial areas, distance to schools.
+First, I filtered the property data in the following ways.
 
-I'm continuing to use the prop500 data for this part as we explore what other factors help us explain sale_price.
+-   Keep properties whose sale_date is between now and Jan. 1st, 2005
 
-```{r dist_otheramenities}
-# adding distance to other amenities to prop500
-prop500_amenities <- prop500 %>% 
-  mutate(dist_park = calculate_nearest_distance(geometry,
-                                                philly_parks),
-         dist_lib = calculate_nearest_distance(geometry,
-                                               libraries),
-         dist_transit = calculate_nearest_distance(geometry,
-                                                   transit),
-         dist_school = calculate_nearest_distance(geometry,
-                                                  school),
-         dist_cityhall = calculate_nearest_distance(geometry,
-                                                    city_hall),
-         dist_hospital = calculate_nearest_distance(geometry,
-                                                    hospitals),
-         dist_parkm = dist_park * 0.3048,
-         dist_libm = dist_lib * 0.3048,
-         dist_transitm = dist_transit * 0.3048,
-         dist_schoolm = dist_school * 0.3048,
-         dist_cityhall = dist_cityhall * 0.3048,
-         dist_hospital = dist_hospital * 0.3048)
+-   Remove properties whose sale price is < \$10,000 and > \$25M
+
+-   Remove properties whose total area and total livable area are under 100 sq. ft.
+
+Then, I calculated each property's distance to the four highways of interest as well as amenities. The amenities that we've looked into so far are parks, libraries, transit stops, schools, City Hall (proxy for the central business district), hospitals, museums, and historic sites. We also included distance to prisons as a disamenity.
+
+We still need to look at sale price's relationship with restaurants and grocery stores (I just need to figure out how to use the google API to do this).
+
+```{r cleaning_properties}
+# takes about 7 min to run
+# cleaned_properties <- philly_properties %>% 
+#   filter(sale_price >= 10000,
+#          sale_price <= 25000000,
+#          total_area >= 100,
+#          total_livable_area >= 100,
+#          sale_date >= as.Date("2005-01-01", format = "%Y-%m-%d"),
+#          sale_date <= Sys.Date()) %>% 
+#   mutate(price_perTLA = sale_price / total_livable_area,
+#          price_perTA = sale_price / total_area,
+#          log_price = log(sale_price),
+#          log_price_perTLA = log(price_perTLA),
+#          log_price_perTA = log(price_perTA),
+#          norm_log_price = scale(log_price),
+#          norm_log_price_perTLA = scale(log_price_perTLA),
+#          norm_log_price_perTA = scale(log_price_perTA),
+#          category_easy = case_when(category_code_description %in% c("APARTMENTS  > 4 UNITS",
+#                                                                     "MIXED USE",
+#                                                                     "MULTI FAMILY",
+#                                                                     "SINGLE FAMILY") ~ "Residential or Mixed",
+#                                    grepl("INDUS", category_code_description) ~ "Industrial",
+#                                    grepl("HOTEL", category_code_description) ~ "Hotel",
+#                                    grepl("OFFICES", category_code_description) ~ "Offices",
+#                                    category_code_description %in% c("COMMERCIAL",
+#                                                                     "GARAGE - COMMERCIAL",
+#                                                                     "RETAIL") ~ "Commercial",
+#                                    grepl("VACANT", category_code_description) ~ "Vacant",
+#                                    .default = "Other"),
+#          dist_to_US001 = calculate_nearest_distance(geometry,
+#                                      philly_mainhighways %>%
+#                                        filter(ST_RT_NO == "0001")),
+#          dist_to_I076 = calculate_nearest_distance(geometry,
+#                                     philly_mainhighways %>%
+#                                       filter(ST_RT_NO == "0076")),
+#          dist_to_I095 = calculate_nearest_distance(geometry,
+#                                     philly_mainhighways %>%
+#                                       filter(ST_RT_NO == "0095")),
+#          dist_to_I676 = calculate_nearest_distance(geometry,
+#                                     philly_mainhighways %>%
+#                                       filter(ST_RT_NO == "0676")),
+#          dist_park = calculate_nearest_distance(geometry,
+#                                                 philly_parks),
+#          dist_lib = calculate_nearest_distance(geometry,
+#                                                libraries),
+#          dist_transit = calculate_nearest_distance(geometry,
+#                                                    transit),
+#          dist_school = calculate_nearest_distance(geometry,
+#                                                   school),
+#          dist_cityhall = calculate_nearest_distance(geometry,
+#                                                     city_hall),
+#          dist_hospital = calculate_nearest_distance(geometry,
+#                                                     hospitals),
+#          dist_museum = calculate_nearest_distance(geometry,
+#                                                   museums),
+#          dist_prison = calculate_nearest_distance(geometry,
+#                                                   prisons),
+#          dist_historic = calculate_nearest_distance(geometry,
+#                                                     historic),
+#          dist_to_US001m = dist_to_US001 * 0.3048,
+#          dist_to_I076m = dist_to_I076 * 0.3048,
+#          dist_to_I095m = dist_to_I095 * 0.3048,
+#          dist_to_I676m = dist_to_I676 * 0.3048,
+#          dist_parkm = dist_park * 0.3048,
+#          dist_libm = dist_lib * 0.3048,
+#          dist_transitm = dist_transit * 0.3048,
+#          dist_schoolm = dist_school * 0.3048,
+#          dist_cityhallm = dist_cityhall * 0.3048,
+#          dist_hospitalm = dist_hospital * 0.3048,
+#          dist_museumm = dist_museum * 0.3048,
+#          dist_prisonm = dist_prison * 0.3048,
+#          dist_historicm = dist_historic * 0.3048)
+
+
+# find closest highway
+# clean_closest <- cleaned_properties %>%
+#   select(matches("objectid|dist_to_US|dist_to_I")) %>%
+#   pivot_longer(cols = 2:5,
+#                names_to = "highway",
+#                values_to = "distance") %>%
+#   group_by(objectid) %>%
+#   summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>%
+#   ungroup()  %>% 
+#   mutate(dist_to_closest_highwaym = dist_to_closest_highway * 0.3048) 
+
+# join closest highway
+# cleaned_props <- left_join(cleaned_properties,
+#                            clean_closest %>% st_drop_geometry(),
+#                            by = "objectid") %>%
+#   mutate(closest_highway = case_when(
+#     dist_to_closest_highway == dist_to_US001 ~ "US-1",
+#     dist_to_closest_highway == dist_to_I076 ~ "I-76",
+#     dist_to_closest_highway == dist_to_I095 ~ "I-95",
+#     dist_to_closest_highway == dist_to_I676 ~ "I-676",
+#     .default = NA),
+#     closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")),
+#     highway_type = case_when(closest_highway %in% c("US-1","I-676") ~ "through neighborhood",
+#                              closest_highway %in% c("I-95","I-76") ~ "along waterway",
+#                              .default = NA)) %>% 
+#   filter(!is.na(closest_highway))
+
+# save for easier access later
+# st_write(cleaned_props,
+#          "/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_cleaned_properties_with_amenities.geojson")
+
+# read in pre-saved data
+cleaned_props <- st_read("/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_cleaned_properties_with_amenities.geojson")
+
+```
+
+
+
+```{r cleaned_prop_plots}
+# plot of log_price_perTA
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+    geom_sf(data = cleaned_props, aes(color = log_price_perTA), size = 0.2) +
+  scale_color_gradient(high = "#eb5600",
+                       low = "#f7cfb7") +
+  labs(title = "Property Price (log sale price per total area)",
+       color = "Log Price") +
+  theme_void()
 
 
 ```
 
-```{r amenities_initial_plots}
-# plot to make sure it's doing what i want it to do
-# philly parks
-ggplot() +
-  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
-  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
-  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
-  geom_sf(data = prop500_amenities,
-          aes(color = dist_park)) +
-  labs(title = "Distance to nearest parks") +
-  theme_void()
+I'm going to go through the following columns of interest (amenity predictors) and make a map + scatterplot and get the Pearson correlation coefficient between the amenity/disamenity + sale price (log_price + log_price_perTA).
 
-# libraries
-ggplot() +
-  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
-  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
-  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
-  geom_sf(data = prop500_amenities,
-          aes(color = dist_lib)) +
-  geom_sf(data = libraries, color = "coral") +
-  labs(title = "Distance to nearest library") +
-  theme_void()
+-   dist_to_closest_highwaym
 
-# transit stops
-ggplot() +
-  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
-  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
-  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
-  geom_sf(data = prop500_amenities,
-          aes(color = dist_transit)) +
-  geom_sf(data = transit, color = "green") +
-  labs(title = "Distance to nearest transit stop") +
-  theme_void()
+-   dist_parkm
 
-# school
-ggplot() +
-  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
-  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
-  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
-  geom_sf(data = prop500_amenities,
-          aes(color = dist_lib)) +
-  geom_sf(data = school, color = "brown") +
-  labs(title = "Distance to nearest school") +
-  theme_void()
+-   dist_libm
 
-# city hall
-ggplot() +
-  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
-  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
-  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
-  geom_sf(data = prop500_amenities,
-          aes(color = dist_cityhall)) +
-  geom_sf(data = city_hall, color = "beige") +
-  labs(title = "Distance to City hall") +
-  theme_void()
+-   dist_transitm
 
-# hospitals
-ggplot() +
-  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
-  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
-  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
-  geom_sf(data = prop500_amenities,
-          aes(color = dist_hospital)) +
-  geom_sf(data = hospitals, color = "red") +
-  labs(title = "Distance to nearest hospital") +
-  theme_void()
+-   dist_schoolm
 
+-   dist_cityhallm
 
+-   dist_hospitalm
+
+-   dist_museumm
+
+-   dist_prisonm
+
+-   dist_historicm
+
+```{r keep_vars_of_interest}
+# only keeping two outcomes (log_price + log_price_perTA) and all amenities
+vars_of_int <- cleaned_props %>% 
+  select(log_price, log_price_perTA, 
+         dist_to_closest_highwaym, dist_parkm, dist_libm, dist_transitm, dist_schoolm, dist_cityhallm, dist_hospitalm, dist_museumm, dist_prisonm, dist_historicm)
 ```
 
+```{r corplot_amenities}
+# cor matrix for corplot
+cors_logprice <- cor(vars_of_int %>% 
+                       select(-log_price_perTA) %>% 
+                       rename(dist_2clssthghwy = dist_to_closest_highwaym) %>% 
+                       st_drop_geometry())
 
-```{r price_otheramenities}
-# dataframe of only features and outcome
-features_outcome <- prop500_amenities %>% 
-  st_drop_geometry() %>% 
-  select(
-    # sale_price, log_price, price_perTA, 
-         log_price_perTA,
-         category_easy, dist_to_closest_highwaym, closest_highway, highway_type,
-         dist_parkm, dist_libm, dist_transitm, dist_schoolm, dist_cityhall, dist_hospital)
-
-# correlation matrix
-cors_forplot <- features_outcome %>% 
-  select_if(is.numeric) %>%
-  cor()
+cors_logpriceperTA <- cor(vars_of_int %>% 
+                            select(-log_price) %>% 
+                            rename(dist_2clssthghwy = dist_to_closest_highwaym) %>% 
+                            st_drop_geometry())
 
 # significance test 
-sigtest_forplot <- cor.mtest(features_outcome %>% 
-  select_if(is.numeric))
+sigtest_logprice <- cor.mtest(vars_of_int %>% 
+                                select(-log_price_perTA) %>% 
+                                rename(dist_2clssthghwy = dist_to_closest_highwaym) %>% 
+                                st_drop_geometry())
+
+sigtest_logpriceperTA <- cor.mtest(vars_of_int %>% 
+                                     select(-log_price) %>% 
+                                     rename(dist_2clssthghwy = dist_to_closest_highwaym) %>% 
+                                     st_drop_geometry())
 
 # pretty correlation matrix of all continuous variables
-png("Output/AmenitiesCorMat.png")
-corrplot(cors_forplot, 
-         p.mat = sigtest_forplot$p, 
+corrplot(cors_logprice, 
+         title = "Correlation Matrix for Log Price",
+         p.mat = sigtest_logprice$p, 
          method = 'circle', 
          type = 'lower', 
          insig='blank',
          addCoef.col ='black', 
          number.cex = 0.8, 
          diag=FALSE)
-dev.off()
+
+corrplot(cors_logpriceperTA, 
+         title = "Correlation Matrix for Log Price",
+         p.mat = sigtest_logpriceperTA$p, 
+         method = 'circle', 
+         type = 'lower', 
+         insig='blank',
+         addCoef.col ='black', 
+         number.cex = 0.8, 
+         diag=FALSE)
+
 
 ```
 
-# Cleaning up property data
+From the correlation matrix, we can see that distance to City Hall, distance to Transit, and distance to museums are all highly collinear with correlation coefficients ranging from .78 (transit and museum) to .98 (museum and city hall). Interestingly, distance to city hall and distance to museum are the variables with the correlation coefficient of highest magnitude with log_price_perTA (at -.38 and -.34 respectively), but distance to transit is not as correlated to the outcome variable (-.18).
 
-I want to filter out property data before adding distance to amenities.
+When considering all properties in Philadelphia (after cleaning this data a bit), we see that distance to closest highway now has a negative relationship with property sale price (-0.18).
+
+
+I'm moving forward with log_price_perTA as outcome for now because the size of the property explains a lot of the variance in property sale price already and right now we are focused on external predictors.
+
+
+### Distance to Parks
+
+```{r dist_park}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_parkm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Park"
+
+cor_toplot <- round(cor(dat$dist_parkm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_parkm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 2000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Park (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_parkm)) +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent", alpha = 0.75) +
+  labs(title = "Distance to nearest park",
+       color = "Dist. to park") +
+  theme_void()
+
+```
+Looking at distance to park without the extreme outlier that is almost 2500m from the nearest park
+```{r dist_park_no_outlier}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_parkm) %>% 
+  filter(dist_parkm < 2000)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Park"
+
+cor_toplot <- round(cor(dat$dist_parkm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_parkm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 1500,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       subtitle = "Removed outlier",
+       x = "Distance to nearest Park (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+
+```
+Removing the outlier had no effect on the correlation.
+
+### Distance to Libraries
+
+```{r dist_lib}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_libm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Library"
+
+cor_toplot <- round(cor(dat$dist_libm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_libm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 3000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Library (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_libm)) +
+  geom_sf(data = libraries, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Library",
+       color = "Dist. to Lib.") +
+  theme_void()
+
+```
+
+### Distance to Transit
+
+```{r dist_transit}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_transitm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Transit Stop"
+
+cor_toplot <- round(cor(dat$dist_transitm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_transitm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 10000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Transit Stop (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_transitm)) +
+  geom_sf(data = transit, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Transit stop",
+       color = "Dist. to station") +
+  theme_void()
+
+```
+
+### Distance to Schools
+
+```{r dist_school}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_schoolm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest School"
+
+cor_toplot <- round(cor(dat$dist_schoolm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_schoolm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 2000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest School (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_schoolm)) +
+  geom_sf(data = school, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest School",
+       color = "Dist. to School") +
+  theme_void()
+
+```
+
+### Distance to City Hall
+
+```{r dist_cityhall}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_cityhallm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to City Hall"
+
+cor_toplot <- round(cor(dat$dist_cityhallm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_cityhallm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 20000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to City Hall (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_cityhallm)) +
+  geom_sf(data = city_hall, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to City Hall",
+       color = "Dist. to CH") +
+  theme_void()
+
+```
+
+### Distance to Hospitals
+
+```{r dist_hospital}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_hospitalm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Hospital"
+
+cor_toplot <- round(cor(dat$dist_hospitalm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_hospitalm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 5000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Hospital (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_hospitalm)) +
+  geom_sf(data = hospitals, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Hospital",
+       color = "Dist. to Hospital") +
+  theme_void()
+
+```
+
+### Distance to Museums
+
+```{r dist_museum}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_museumm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Museum"
+
+cor_toplot <- round(cor(dat$dist_museumm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_museumm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 15000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Museum (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_museumm)) +
+  geom_sf(data = museums, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Museum",
+       color = "Dist. to Museum") +
+  theme_void()
+
+```
+
+### Distance to Prisons
+
+```{r dist_prison}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_prisonm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Prison"
+
+cor_toplot <- round(cor(dat$dist_prisonm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_prisonm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 9000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Prison (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_prisonm)) +
+  geom_sf(data = prisons, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Prison",
+       color = "Dist. to Prison") +
+  theme_void()
+
+```
+
+### Distance to Historic Site
+
+```{r dist_hist}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_historicm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Historic Site"
+
+cor_toplot <- round(cor(dat$dist_historicm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_historicm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 6000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Historic Site (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_historicm)) +
+  geom_sf(data = historic, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to Historic Site",
+       color = "Dist. to Hist.") +
+  theme_void()
+
+```
+
+
+# Relationship between Housing Price and other variables (only keeping properties whose sale date is within the last 5 years)
+
+First, I filtered the property data in the following ways.
+
+-   Keep properties whose sale_date is between now and Jan. 1st, 2020
+
+-   Remove properties whose sale price is < \$10,000 and > \$25M
+
+-   Remove properties whose total area and total livable area are under 100 sq. ft.
+
 
 ```{r cleaning_properties}
-cleaned_properties <- philly_properties %>% 
-  filter(sale_price >= 10000,
-         sale_price <= 25000000,
-         total_area >= 100,
-         total_livable_area >= 100,
-         sale_date >= as.Date("2005-01-01", format = "%Y-%m-%d"),
-         sale_date <= Sys.Date()) %>% 
-  mutate(price_perTLA = sale_price / total_livable_area,
-         price_perTA = sale_price / total_area,
-         log_price = log(sale_price),
-         log_price_perTLA = log(price_perTLA),
-         log_price_perTA = log(price_perTA),
-         norm_log_price = scale(log_price),
-         norm_log_price_perTLA = scale(log_price_perTLA),
-         norm_log_price_perTA = scale(log_price_perTA),
-         category_easy = case_when(category_code_description %in% c("APARTMENTS  > 4 UNITS",
-                                                                    "MIXED USE",
-                                                                    "MULTI FAMILY",
-                                                                    "SINGLE FAMILY") ~ "Residential or Mixed",
-                                   grepl("INDUS", category_code_description) ~ "Industrial",
-                                   grepl("HOTEL", category_code_description) ~ "Hotel",
-                                   grepl("OFFICES", category_code_description) ~ "Offices",
-                                   category_code_description %in% c("COMMERCIAL",
-                                                                    "GARAGE - COMMERCIAL",
-                                                                    "RETAIL") ~ "Commercial",
-                                   grepl("VACANT", category_code_description) ~ "Vacant",
-                                   .default = "Other"),
-         dist_to_US001 = calculate_nearest_distance(geometry,
-                                     philly_mainhighways %>%
-                                       filter(ST_RT_NO == "0001")),
-         dist_to_I076 = calculate_nearest_distance(geometry,
-                                    philly_mainhighways %>%
-                                      filter(ST_RT_NO == "0076")),
-         dist_to_I095 = calculate_nearest_distance(geometry,
-                                    philly_mainhighways %>%
-                                      filter(ST_RT_NO == "0095")),
-         dist_to_I676 = calculate_nearest_distance(geometry,
-                                    philly_mainhighways %>%
-                                      filter(ST_RT_NO == "0676")),
-         dist_park = calculate_nearest_distance(geometry,
-                                                philly_parks),
-         dist_lib = calculate_nearest_distance(geometry,
-                                               libraries),
-         dist_transit = calculate_nearest_distance(geometry,
-                                                   transit),
-         dist_school = calculate_nearest_distance(geometry,
-                                                  school),
-         dist_cityhall = calculate_nearest_distance(geometry,
-                                                    city_hall),
-         dist_hospital = calculate_nearest_distance(geometry,
-                                                    hospitals),
-         dist_hospital = calculate_nearest_distance(geometry,
-                                                    hospitals),
-         dist_to_US001m = dist_to_US001 * 0.3048,
-         dist_to_I076m = dist_to_I076 * 0.3048,
-         dist_to_I095m = dist_to_I095 * 0.3048,
-         dist_to_I676m = dist_to_I676 * 0.3048,
-         dist_parkm = dist_park * 0.3048,
-         dist_libm = dist_lib * 0.3048,
-         dist_transitm = dist_transit * 0.3048,
-         dist_schoolm = dist_school * 0.3048,
-         dist_cityhall = dist_cityhall * 0.3048,
-         dist_hospital = dist_hospital * 0.3048)
-
-# find closest highway
-prop500_closest <- prop500 %>%
-  select(matches("objectid|dist_to")) %>%
-  pivot_longer(cols = 2:5,
-               names_to = "highway",
-               values_to = "distance") %>%
-  group_by(objectid) %>%
-  summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>%
-  ungroup()  %>% 
-  mutate(dist_to_closest_highwaym = dist_to_closest_highway * 0.3048) 
-
-# join closest highway
-prop500 <- left_join(prop500,
-                     prop500_closest %>% st_drop_geometry(),
-                     by = "objectid") %>%
-  mutate(closest_highway = case_when(
-    dist_to_closest_highway == dist_to_US001 ~ "US-1",
-    dist_to_closest_highway == dist_to_I076 ~ "I-76",
-    dist_to_closest_highway == dist_to_I095 ~ "I-95",
-    dist_to_closest_highway == dist_to_I676 ~ "I-676",
-    .default = NA),
-    closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")),
-    highway_type = case_when(closest_highway %in% c("US-1","I-676") ~ "through neighborhood",
-                             closest_highway %in% c("I-95","I-76") ~ "along waterway",
-                             .default = NA))
+# read in pre-saved data
+cleaned_props <- st_read("/Users/akiradisandro/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_cleaned_properties_with_amenities.geojson") %>% 
+  filter(sale_date >= as.Date("2005-01-01", format = "%Y-%m-%d"),)
 
 ```
 
+
+
+```{r cleaned_prop_plots}
+# plot of log_price_perTA
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+    geom_sf(data = cleaned_props, aes(color = log_price_perTA), size = 0.2) +
+  scale_color_gradient(high = "#eb5600",
+                       low = "#f7cfb7") +
+  labs(title = "Property Price (log sale price per total area)",
+       color = "Log Price") +
+  theme_void()
+
+
+```
+
+I'm going to go through the following columns of interest (amenity predictors) and make a map + scatterplot and get the Pearson correlation coefficient between the amenity/disamenity + sale price (log_price + log_price_perTA).
+
+-   dist_to_closest_highwaym
+
+-   dist_parkm
+
+-   dist_libm
+
+-   dist_transitm
+
+-   dist_schoolm
+
+-   dist_cityhallm
+
+-   dist_hospitalm
+
+-   dist_museumm
+
+-   dist_prisonm
+
+-   dist_historicm
+
+```{r keep_vars_of_interest}
+# only keeping two outcomes (log_price + log_price_perTA) and all amenities
+vars_of_int <- cleaned_props %>% 
+  select(log_price, log_price_perTA, 
+         dist_to_closest_highwaym, dist_parkm, dist_libm, dist_transitm, dist_schoolm, dist_cityhallm, dist_hospitalm, dist_museumm, dist_prisonm, dist_historicm)
+```
+
+```{r corplot_amenities}
+# cor matrix for corplot
+cors_logprice <- cor(vars_of_int %>% 
+                       select(-log_price_perTA) %>% 
+                       rename(dist_2clssthghwy = dist_to_closest_highwaym) %>% 
+                       st_drop_geometry())
+
+cors_logpriceperTA <- cor(vars_of_int %>% 
+                            select(-log_price) %>% 
+                            rename(dist_2clssthghwy = dist_to_closest_highwaym) %>% 
+                            st_drop_geometry())
+
+# significance test 
+sigtest_logprice <- cor.mtest(vars_of_int %>% 
+                                select(-log_price_perTA) %>% 
+                                rename(dist_2clssthghwy = dist_to_closest_highwaym) %>% 
+                                st_drop_geometry())
+
+sigtest_logpriceperTA <- cor.mtest(vars_of_int %>% 
+                                     select(-log_price) %>% 
+                                     rename(dist_2clssthghwy = dist_to_closest_highwaym) %>% 
+                                     st_drop_geometry())
+
+# pretty correlation matrix of all continuous variables
+corrplot(cors_logprice, 
+         title = "Correlation Matrix for Log Price",
+         p.mat = sigtest_logprice$p, 
+         method = 'circle', 
+         type = 'lower', 
+         insig='blank',
+         addCoef.col ='black', 
+         number.cex = 0.8, 
+         diag=FALSE)
+
+corrplot(cors_logpriceperTA, 
+         title = "Correlation Matrix for Log Price",
+         p.mat = sigtest_logpriceperTA$p, 
+         method = 'circle', 
+         type = 'lower', 
+         insig='blank',
+         addCoef.col ='black', 
+         number.cex = 0.8, 
+         diag=FALSE)
+
+
+```
+
+From the correlation matrix, we can see that distance to City Hall, distance to Transit, and distance to museums are all highly collinear with correlation coefficients ranging from .78 (transit and museum) to .98 (museum and city hall). Interestingly, distance to city hall and distance to museum are the variables with the correlation coefficient of highest magnitude with log_price_perTA (at -.38 and -.34 respectively), but distance to transit is not as correlated to the outcome variable (-.18).
+
+When considering all properties in Philadelphia (after cleaning this data a bit), we see that distance to closest highway now has a negative relationship with property sale price (-0.18).
+
+
+I'm moving forward with log_price_perTA as outcome for now because the size of the property explains a lot of the variance in property sale price already and right now we are focused on external predictors.
+
+
+### Distance to Parks
+
+```{r dist_park}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_parkm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Park"
+
+cor_toplot <- round(cor(dat$dist_parkm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_parkm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 2000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Park (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_parkm)) +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent", alpha = 0.75) +
+  labs(title = "Distance to nearest park",
+       color = "Dist. to park") +
+  theme_void()
+
+```
+Looking at distance to park without the extreme outlier that is almost 2500m from the nearest park
+```{r dist_park_no_outlier}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_parkm) %>% 
+  filter(dist_parkm < 2000)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Park"
+
+cor_toplot <- round(cor(dat$dist_parkm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_parkm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 1500,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       subtitle = "Removed outlier",
+       x = "Distance to nearest Park (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+
+```
+Removing the outlier had no effect on the correlation.
+
+### Distance to Libraries
+
+```{r dist_lib}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_libm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Library"
+
+cor_toplot <- round(cor(dat$dist_libm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_libm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 3000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Library (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_libm)) +
+  geom_sf(data = libraries, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Library",
+       color = "Dist. to Lib.") +
+  theme_void()
+
+```
+
+### Distance to Transit
+
+```{r dist_transit}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_transitm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Transit Stop"
+
+cor_toplot <- round(cor(dat$dist_transitm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_transitm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 10000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Transit Stop (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_transitm)) +
+  geom_sf(data = transit, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Transit stop",
+       color = "Dist. to station") +
+  theme_void()
+
+```
+
+### Distance to Schools
+
+```{r dist_school}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_schoolm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest School"
+
+cor_toplot <- round(cor(dat$dist_schoolm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_schoolm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 2000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest School (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_schoolm)) +
+  geom_sf(data = school, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest School",
+       color = "Dist. to School") +
+  theme_void()
+
+```
+
+### Distance to City Hall
+
+```{r dist_cityhall}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_cityhallm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to City Hall"
+
+cor_toplot <- round(cor(dat$dist_cityhallm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_cityhallm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 20000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to City Hall (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_cityhallm)) +
+  geom_sf(data = city_hall, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to City Hall",
+       color = "Dist. to CH") +
+  theme_void()
+
+```
+
+### Distance to Hospitals
+
+```{r dist_hospital}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_hospitalm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Hospital"
+
+cor_toplot <- round(cor(dat$dist_hospitalm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_hospitalm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 5000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Hospital (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_hospitalm)) +
+  geom_sf(data = hospitals, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Hospital",
+       color = "Dist. to Hospital") +
+  theme_void()
+
+```
+
+### Distance to Museums
+
+```{r dist_museum}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_museumm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Museum"
+
+cor_toplot <- round(cor(dat$dist_museumm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_museumm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 15000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Museum (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_museumm)) +
+  geom_sf(data = museums, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Museum",
+       color = "Dist. to Museum") +
+  theme_void()
+
+```
+
+### Distance to Prisons
+
+```{r dist_prison}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_prisonm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Prison"
+
+cor_toplot <- round(cor(dat$dist_prisonm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_prisonm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 9000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Prison (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_prisonm)) +
+  geom_sf(data = prisons, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to nearest Prison",
+       color = "Dist. to Prison") +
+  theme_void()
+
+```
+
+### Distance to Historic Site
+
+```{r dist_hist}
+dat <- vars_of_int %>% 
+  select(log_price_perTA, dist_historicm)
+
+scat_title <- "Log Price (per total area) as a function of Distance to nearest Historic Site"
+
+cor_toplot <- round(cor(dat$dist_historicm, dat$log_price_perTA), 3)
+
+# scatter
+ggplot(dat,
+       aes(x = dist_historicm,
+           y = log_price_perTA)) +
+  geom_point(size = 0.2, alpha = 0.3, color = "#1a9988") +
+  geom_smooth(method = "lm", color = "#eb5600", fill = "#eba075") +
+  geom_text(aes(label = cor_toplot,
+                x = 6000,
+                y = 10,
+                color = "#eb5600"),
+            show.legend = F) +
+  labs(title = scat_title,
+       x = "Distance to nearest Historic Site (m)",
+       y = "Log Price (per total area)") +
+  theme_minimal()
+
+# map
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = dat, size = 0.2,
+          aes(color = dist_historicm)) +
+  geom_sf(data = historic, color = "#faef73") +
+  scale_color_gradient(high = "#f7cfb7",
+                       low = "#eb5600") +
+  labs(title = "Distance to Historic Site",
+       color = "Dist. to Hist.") +
+  theme_void()
+
+```
