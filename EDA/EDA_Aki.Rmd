@@ -19,12 +19,18 @@ library(tidycensus)
 library(sf)
 library(ggplot2)
 library(kableExtra)
+library(corrplot)
+library(googleway)
+library(RgoogleMaps)
 
 # read in API
 census_api_key("f2855a6037284cb9cbed55e96e6b99be17ee05c6", overwrite = TRUE, install = T)
 
 # mapbox API
 # options(rdeck.mapbox_access_token = "pk.eyJ1IjoiY2hpYmlha2kiLCJhIjoiY20xODh2NTNqMTBvaDJqb2ptbjM4ZGViayJ9.un9M1_-S6kI8M0ktqZLz_Q")
+
+# google API
+
 
 ```
 
@@ -95,10 +101,49 @@ facilities <- st_read("https://opendata.arcgis.com/datasets/b3c133c3b15d4c96bcd4
 libraries <- facilities %>% 
   filter(ASSET_GROUP1 == "A8")
 
+# prisons (from facilities data)
+prisons <- facilities %>% 
+  filter(ASSET_GROUP2 == "A13.3")
+
+# historic site (from facilities data)
+historic <- facilities %>% 
+  filter(ASSET_SUBTYPE1 == "C21")
+
+# museums (from facilities data)
+museums <- facilities %>% 
+  filter(ASSET_GROUP1 == "A18",
+         ASSET_SUBTYPE1 == "C35")
+
 # produce (LPSS, HPSS -- indicators for produce; low or high produce supply stores)
 retail_produce <- st_read("https://opendata.arcgis.com/datasets/53b8a1c653a74c92b2de23a5d7bf04a0_0.geojson") %>%
   st_transform('EPSG:2272')
 
+# transit stops
+metro <- st_read("https://opendata.arcgis.com/api/v3/datasets/af52d74b872045d0abb4a6bbbb249453_0/downloads/data?format=geojson&spatialRefId=4326") %>%
+  st_transform('EPSG:2272') %>%
+  mutate(Type = "metro")
+
+city_hall <- metro[metro$Station == 'City Hall', 6]
+
+trolley <- st_read("https://opendata.arcgis.com/api/v3/datasets/dd2afb618d804100867dfe0669383159_0/downloads/data?format=geojson&spatialRefId=4326") %>%
+  st_transform('EPSG:2272')
+
+# why are some trolley stations missing? going southwest from 40th st station + going northwest from 33rd/34th station
+
+trolley_renamed <- trolley %>%
+    rename(Station = StopName,
+           Route = LineAbbr,
+           Longitude = Lon,
+           Latitude = Lat) %>%
+    mutate(Type = "trolley")
+
+# Combine both datasets into one
+transit <- bind_rows(metro, trolley_renamed)
+
+# PA hospitals (within 2.5 miles of philly bounds)
+hospitals <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/DOH_Hospitals202311.geojson") %>% 
+  st_transform('EPSG:2272') %>% 
+  st_intersection(st_buffer(philly_bounds, 13200))
 
 # checking out what Luming_property.csv looks like
 luming_property <- read.csv("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/Dataset/Luming_property.csv")
@@ -1453,9 +1498,231 @@ ggplot(data = prop1000_under1m,
 
 Notably, I'm exploring the relationship between housing price and distance to highways, distance to parks, distance to commercial areas, distance to schools.
 
-For now, I'm using the study area-related data that Luming and Sijia compiled
+I'm continuing to use the prop500 data for this part as we explore what other factors help us explain sale_price.
+
+```{r dist_otheramenities}
+# adding distance to other amenities to prop500
+prop500_amenities <- prop500 %>% 
+  mutate(dist_park = calculate_nearest_distance(geometry,
+                                                philly_parks),
+         dist_lib = calculate_nearest_distance(geometry,
+                                               libraries),
+         dist_transit = calculate_nearest_distance(geometry,
+                                                   transit),
+         dist_school = calculate_nearest_distance(geometry,
+                                                  school),
+         dist_cityhall = calculate_nearest_distance(geometry,
+                                                    city_hall),
+         dist_hospital = calculate_nearest_distance(geometry,
+                                                    hospitals),
+         dist_parkm = dist_park * 0.3048,
+         dist_libm = dist_lib * 0.3048,
+         dist_transitm = dist_transit * 0.3048,
+         dist_schoolm = dist_school * 0.3048,
+         dist_cityhall = dist_cityhall * 0.3048,
+         dist_hospital = dist_hospital * 0.3048)
+
+
+```
+
+```{r amenities_initial_plots}
+# plot to make sure it's doing what i want it to do
+# philly parks
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = prop500_amenities,
+          aes(color = dist_park)) +
+  labs(title = "Distance to nearest parks") +
+  theme_void()
+
+# libraries
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = prop500_amenities,
+          aes(color = dist_lib)) +
+  geom_sf(data = libraries, color = "coral") +
+  labs(title = "Distance to nearest library") +
+  theme_void()
+
+# transit stops
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = prop500_amenities,
+          aes(color = dist_transit)) +
+  geom_sf(data = transit, color = "green") +
+  labs(title = "Distance to nearest transit stop") +
+  theme_void()
+
+# school
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = prop500_amenities,
+          aes(color = dist_lib)) +
+  geom_sf(data = school, color = "brown") +
+  labs(title = "Distance to nearest school") +
+  theme_void()
+
+# city hall
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = prop500_amenities,
+          aes(color = dist_cityhall)) +
+  geom_sf(data = city_hall, color = "beige") +
+  labs(title = "Distance to City hall") +
+  theme_void()
+
+# hospitals
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = prop500_amenities,
+          aes(color = dist_hospital)) +
+  geom_sf(data = hospitals, color = "red") +
+  labs(title = "Distance to nearest hospital") +
+  theme_void()
+
+
+```
+
 
 ```{r price_otheramenities}
+# dataframe of only features and outcome
+features_outcome <- prop500_amenities %>% 
+  st_drop_geometry() %>% 
+  select(
+    # sale_price, log_price, price_perTA, 
+         log_price_perTA,
+         category_easy, dist_to_closest_highwaym, closest_highway, highway_type,
+         dist_parkm, dist_libm, dist_transitm, dist_schoolm, dist_cityhall, dist_hospital)
+
+# correlation matrix
+cors_forplot <- features_outcome %>% 
+  select_if(is.numeric) %>%
+  cor()
+
+# significance test 
+sigtest_forplot <- cor.mtest(features_outcome %>% 
+  select_if(is.numeric))
+
+# pretty correlation matrix of all continuous variables
+png("Output/AmenitiesCorMat.png")
+corrplot(cors_forplot, 
+         p.mat = sigtest_forplot$p, 
+         method = 'circle', 
+         type = 'lower', 
+         insig='blank',
+         addCoef.col ='black', 
+         number.cex = 0.8, 
+         diag=FALSE)
+dev.off()
+
+```
+
+# Cleaning up property data
+
+I want to filter out property data before adding distance to amenities.
+
+```{r cleaning_properties}
+cleaned_properties <- philly_properties %>% 
+  filter(sale_price >= 10000,
+         sale_price <= 25000000,
+         total_area >= 100,
+         total_livable_area >= 100,
+         sale_date >= as.Date("2005-01-01", format = "%Y-%m-%d"),
+         sale_date <= Sys.Date()) %>% 
+  mutate(price_perTLA = sale_price / total_livable_area,
+         price_perTA = sale_price / total_area,
+         log_price = log(sale_price),
+         log_price_perTLA = log(price_perTLA),
+         log_price_perTA = log(price_perTA),
+         norm_log_price = scale(log_price),
+         norm_log_price_perTLA = scale(log_price_perTLA),
+         norm_log_price_perTA = scale(log_price_perTA),
+         category_easy = case_when(category_code_description %in% c("APARTMENTS  > 4 UNITS",
+                                                                    "MIXED USE",
+                                                                    "MULTI FAMILY",
+                                                                    "SINGLE FAMILY") ~ "Residential or Mixed",
+                                   grepl("INDUS", category_code_description) ~ "Industrial",
+                                   grepl("HOTEL", category_code_description) ~ "Hotel",
+                                   grepl("OFFICES", category_code_description) ~ "Offices",
+                                   category_code_description %in% c("COMMERCIAL",
+                                                                    "GARAGE - COMMERCIAL",
+                                                                    "RETAIL") ~ "Commercial",
+                                   grepl("VACANT", category_code_description) ~ "Vacant",
+                                   .default = "Other"),
+         dist_to_US001 = calculate_nearest_distance(geometry,
+                                     philly_mainhighways %>%
+                                       filter(ST_RT_NO == "0001")),
+         dist_to_I076 = calculate_nearest_distance(geometry,
+                                    philly_mainhighways %>%
+                                      filter(ST_RT_NO == "0076")),
+         dist_to_I095 = calculate_nearest_distance(geometry,
+                                    philly_mainhighways %>%
+                                      filter(ST_RT_NO == "0095")),
+         dist_to_I676 = calculate_nearest_distance(geometry,
+                                    philly_mainhighways %>%
+                                      filter(ST_RT_NO == "0676")),
+         dist_park = calculate_nearest_distance(geometry,
+                                                philly_parks),
+         dist_lib = calculate_nearest_distance(geometry,
+                                               libraries),
+         dist_transit = calculate_nearest_distance(geometry,
+                                                   transit),
+         dist_school = calculate_nearest_distance(geometry,
+                                                  school),
+         dist_cityhall = calculate_nearest_distance(geometry,
+                                                    city_hall),
+         dist_hospital = calculate_nearest_distance(geometry,
+                                                    hospitals),
+         dist_hospital = calculate_nearest_distance(geometry,
+                                                    hospitals),
+         dist_to_US001m = dist_to_US001 * 0.3048,
+         dist_to_I076m = dist_to_I076 * 0.3048,
+         dist_to_I095m = dist_to_I095 * 0.3048,
+         dist_to_I676m = dist_to_I676 * 0.3048,
+         dist_parkm = dist_park * 0.3048,
+         dist_libm = dist_lib * 0.3048,
+         dist_transitm = dist_transit * 0.3048,
+         dist_schoolm = dist_school * 0.3048,
+         dist_cityhall = dist_cityhall * 0.3048,
+         dist_hospital = dist_hospital * 0.3048)
+
+# find closest highway
+prop500_closest <- prop500 %>%
+  select(matches("objectid|dist_to")) %>%
+  pivot_longer(cols = 2:5,
+               names_to = "highway",
+               values_to = "distance") %>%
+  group_by(objectid) %>%
+  summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>%
+  ungroup()  %>% 
+  mutate(dist_to_closest_highwaym = dist_to_closest_highway * 0.3048) 
+
+# join closest highway
+prop500 <- left_join(prop500,
+                     prop500_closest %>% st_drop_geometry(),
+                     by = "objectid") %>%
+  mutate(closest_highway = case_when(
+    dist_to_closest_highway == dist_to_US001 ~ "US-1",
+    dist_to_closest_highway == dist_to_I076 ~ "I-76",
+    dist_to_closest_highway == dist_to_I095 ~ "I-95",
+    dist_to_closest_highway == dist_to_I676 ~ "I-676",
+    .default = NA),
+    closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")),
+    highway_type = case_when(closest_highway %in% c("US-1","I-676") ~ "through neighborhood",
+                             closest_highway %in% c("I-95","I-76") ~ "along waterway",
+                             .default = NA))
 
 ```
 
