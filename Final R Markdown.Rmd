@@ -1,0 +1,255 @@
+---
+title: "Envisioning Neighborhood Futures After the Chinatown Stitch"
+author: "Aki Di Sandro, Ray Ma, Luming Xu, Sijia Zhang, Yixuan Zhou"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+    theme: sandstone
+    toc_float: true
+    code_folding: hide
+    toc_depth: 3
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup_general, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
+    fig.align = "center") 
+options(scipen=999)
+
+
+library(sf)
+library(ggplot2)
+library(tidycensus)
+library(tidyverse)
+library(ggtext)
+library(glue)
+library(leaflet)
+library(mapview)
+```
+
+```{r setup_wd, message = FALSE}
+# Change to your own workspace
+knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
+wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
+```
+
+
+# Use Case
+
+## Background
+
+It is hard to talk about the history of the **Philadelphia Chinatown** without the construction of **I-676**, also known as the **Vine Street Expressway**. Although the highway serves as a significant thoroughfare through Center City Philadelphia, the indispensable repercussion on the adjacent neighborhoods still lingers today. Consequences of the highway such as demolishment of buildings, pedestrian safety threats, traffic congestion, as well as noise and air pollutions had been harming Chinatown and its surrounding neighborhoods over the past decades and are yet to be addressed. 
+
+Standing in opposition to the issues, **City of Philadelphia Office of Transportation and Infrastructure and Sustainability (OTIS)** brought forth the plan of capping sections of the expressway as a solution to address its historical harms on the Chinatown region. This “cap”, named **the Chinatown Stitch project**, aimed to create a safe and equitable green space for the public that would reconnect areas north and south to the Vine Street expressway. Receiving funds from the US department of Transportation and the local organizations, the construction of the Chinatown Stitch will start in 2027 and is expected to be completed in early 2030.
+
+This purpose of this study is to help OTIS **understand the housing market of Philadelphia Chinatown region before and after the implementation of the Chinatown Stitch**. The first part of the study will focus the effects of highways on sales prices in the study region as well as the entire Philadelphia. House prices will then be estimated using **three predictive models under three different future scenarios**: business as usual without the implementation of the Chinatown Stitch, business as usual with the implementation of the Chinatown Stitch, and an alternative future in which the Chinatown Stitch significantly reshapes the urban landscape of the study region.
+
+
+(insert pictures)
+
+## Study Area
+
++ Philadelphia (case studies)
++ (3 block groups)
++ 2 sub areas
+
+```{r StudyArea_data, quiet = TRUE, results = 'hide'}
+studyarea <- st_read("Dataset/studyarea/StudyArea.shp") %>%
+  st_transform('EPSG:2272')
+
+studyarea_north <- st_read("Dataset/studyarea-sub/studyarea_north.shp") %>%
+  st_transform('EPSG:2272')
+
+studyarea_south <- st_read("Dataset/studyarea-sub/studyarea_south.shp") %>%
+  st_transform('EPSG:2272')
+
+I_676 <- st_read("Dataset/Highways/I_676.shp") %>%
+  st_transform('EPSG:2272')
+```
+
+```{r UseCase_data, quiet = TRUE, results = 'hide'}
+studyarea_4326 <- st_transform(studyarea, crs = 4326)
+bbox <- as.list(st_bbox(studyarea_4326))
+
+ChinatownStitch_4326 <- st_read("Dataset/Chinatown_Stitch/Chinatown_Stitch.shp") %>%
+  st_transform('EPSG:4326')
+
+I676_4326 <- st_transform(I_676, crs = 4326)
+
+landuse_4326 <- st_read("Dataset/landuse_clip/Land_Use_ClipLayer.shp") %>%
+  st_transform('EPSG:4326')
+
+landuse_4326_plot <- landuse_4326 %>%
+  filter(C_DIG2DESC != 51 & C_DIG2DESC != 71)
+
+landuse_park <- landuse_4326 %>%
+  filter(C_DIG2DESC == 71)
+
+landuse_park_ing <- landuse_4326 %>%
+  filter(OBJECTID_1 == 514214)
+
+nhoods_4326 <- 
+  st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>%
+  st_transform('EPSG:4326')
+
+Chinatown_Callowhill <- nhoods_4326 %>%
+  filter(NAME %in% c("CHINATOWN", "CALLOWHILL"))
+```
+
+
+```{r UseCase_plot}
+UseCase <- leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(data = studyarea_4326,
+              color = "black",       # Black border
+              weight = 4,            # Border thickness
+              dashArray = "8,12",     # Dashed line pattern (5px on, 5px off)
+              fill = FALSE) %>%
+    addPolygons(data = landuse_4326_plot,
+              color = "grey",
+              weight = 0.8,
+              fillColor = "#DFF3E3",
+              fillOpacity = 0.4) %>%
+  addPolygons(data = Chinatown_Callowhill,
+              color = "#eb5600",
+              weight = 1,
+              opacity = 0.5,
+              dashArray = "5,5",
+              fillColor = "#eb5600",
+              fillOpacity = 0.1) %>%
+  addPolygons(data = landuse_park,
+              color = "#1a9988",
+              weight = 1,
+              fillOpacity = 0.6,
+              fillColor = "#1a9988") %>%
+  addPolygons(data = landuse_park_ing,
+              color = "#1a9988",
+              weight = 2,
+              opacity = 0.8,
+              fill = FALSE) %>%
+  addPolylines(data = I676_4326,
+               color = "#eb5600",
+               opacity = 1,
+               weight = 2) %>%
+  addPolygons(data = ChinatownStitch_4326,
+              color = "#eb5600",
+              weight = 2,
+              opacity = 1,
+              fillColor = "#1a9988",
+              fillOpacity = 0.8
+              # fill = alpha("#1a9988", 0.5)
+              ) %>%
+  fitBounds(
+    lng1 = bbox$xmin, 
+    lat1 = bbox$ymin, 
+    lng2 = bbox$xmax, 
+    lat2 = bbox$ymax
+  )
+UseCase
+```
+
+
+## Methodology
+
+![*Methodology*](Final R Markdown/Images/methodology.png)
+
+# Data Wrangling
+
+## Property Data
+
++ [Philadelphia Properties and Assessment History](https://opendataphilly.org/datasets/philadelphia-properties-and-assessment-history/)
+
+## Census Data
+
+## Neighborhood Context
+
++ [PPR Properties](https://opendataphilly.org/datasets/ppr-properties/)
+
+## Social Survey
+
+## POI Data
+
+# Exploratory Data Analysis
+
+```{r eda_data, quiet = TRUE, results = 'hide'}
+property_EDA <- st_read("Dataset/property_sijia_eda.geojson") %>%
+  st_transform('EPSG:2272')
+
+property_EDA_update <- property_EDA %>%
+  dplyr::select(-sale_price.y) %>%
+  rename(sale_price = sale_price.x) %>%
+  mutate(log_sale_price = ifelse(!is.na(sale_price) & sale_price == 0, 
+                                 log(sale_price + 1), 
+                                 log(sale_price)))
+
+property_EDA_update <- 
+  rbind(
+    property_EDA_update %>% st_intersection(studyarea_north["geometry"]) %>%
+      mutate(I676 = "north"),
+    property_EDA_update %>% st_intersection(studyarea_south["geometry"]) %>%
+      mutate(I676 = "south")
+  )
+```
+
+
+## Basic Geography
+
+## Sales Price Change
+
+## Discontinuity Effects
+
+```{r discontinuity_data, quiet = TRUE, results = 'hide'}
+property_discontinutiy <- property_EDA_update %>%
+  mutate(distance_to_highway = case_when(
+    I676 == "north" ~ distance_to_I676,
+    I676 == "south" ~ -distance_to_I676
+  ))
+
+discontinuity_plot <- property_discontinutiy %>%
+  st_drop_geometry() %>%
+  filter(sale_price > 10 & sale_price < 1e6) %>%
+  group_by(distance_to_highway, I676) %>%
+  summarise(log_sale_price = mean(log_sale_price, na.rm = TRUE), .groups = "drop")
+
+```
+
+```{r discontinuity_plot}
+ggplot(discontinuity_plot, aes(x = distance_to_highway, y = log_sale_price, color = I676)) +
+  geom_point(size = 0.5) +
+  geom_smooth(method = "lm", se = FALSE, size = 1.2) +
+  geom_vline(xintercept = 0, color = "black", size = 2) +
+  scale_colour_manual(values = c("#eb5600", "#1a9988")) +
+  theme_minimal() +
+  theme(legend.position = "None",
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = ggtext::element_markdown(size = 12),
+        plot.caption = element_text(hjust = 0)) +
+  labs(title = 'Logged Sale Price as a Function of Distance to the Highway', 
+       subtitle = glue("<span style='color:#1a9988;'>South Side</span> vs. <span style='color:#eb5600;'>North Side</span>"),
+       # caption = "Figure 4.1",
+       # x = "South Side of the Highway          I-676                                     North Side of the Highway",
+       x = "Distance to the Highyway (ft)                          ",
+       y = "Log-transformed Sale Price") +
+    geom_label(aes(x = 0, y = 8,
+                 label = "I-676"),
+             fill = "black", color = "white", fontface = "bold", size = 5)
+```
+
+
+## Case Studies
+
+## Feature Engineering
+
+### Continuous Features
+
+### Categorical Features
+
+### Summary of Features
+
+
+
+# Predictive Modeling
