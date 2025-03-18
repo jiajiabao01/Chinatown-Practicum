@@ -1142,27 +1142,9 @@ prop500 %>%
 
 ### Multiple Linear Regression: Sale Price by Distance to Highway (controlling for other variables)
 
-```{r prop500_mult_reg}
+We're looking at all properties in Philadelphia (sale date within the last 5 years, aka between Jan. 1st, 2020 - Dec.31st, 2024; sale price is < \$30,000 and > 5 SD from the mean sale price; total area is < 100 sq. ft.; inflation-adjusted prices).
 
-```
-
-
-
-# Relationship between Housing Price and other variables
-
-First, I filtered the property data in the following ways.
-
--   Keep properties whose sale date is between Jan. 1st, 2020 - Dec.31st, 2024
-
--   Adjust sales prices for inflation
-
--   Remove properties whose sale price is < \$30,000 and > 5 SD from the mean sale price
-
--   Remove properties whose total area is < 100 sq. ft.
-
-Then, I calculated each property's distance to the four highways of interest as well as amenities. The amenities that we've looked into so far are parks, libraries, transit stops, schools, City Hall (proxy for the central business district), hospitals, museums, and historic sites. We also included distance to prisons as a disamenity.
-
-We still need to look at sale price's relationship with restaurants and grocery stores (I just need to figure out how to use the google API to do this).
+I'm using log_price = log(adjusted_sale_price) as the outcome variable and including internal features, amenities, and fixed effects in addition to distance to highway.
 
 ```{r cleaning_properties}
 # takes about 7 min to run
@@ -1260,9 +1242,81 @@ We still need to look at sale price's relationship with restaurants and grocery 
 #          "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_cleaned_properties_with_amenities_250318.geojson")
 
 # read in pre-saved data
-cleaned_props <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_cleaned_properties_with_amenities.geojson")
+cleaned_props <- st_read("~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/data/philly_cleaned_properties_with_amenities.geojson") %>% 
+  mutate(year_built = as.numeric(year_built))
 
 ```
+
+Looking at correlation matrix of internal characteristics.
+
+```{r internal_cormat}
+
+```
+
+
+```{r prop_mult_reg}
+# model with no interactions
+mult_reg <- lm(log_price ~ dist_to_closest_highwaym + 
+                 total_area + year_built + # internal characteristics
+                 dist_parkm + dist_libm + dist_cityhallm + dist_hospitalm + dist_historicm + # external / amenities
+                 factor(zip_code), # neighborhood effects (via zip code for now)
+               data = cleaned_props)
+
+summary(mult_reg)
+
+# model with interaction between dist to closest highway and ZIP
+mult_reg_int <- lm(log_price ~ dist_to_closest_highwaym * factor(zip_code) + 
+                     total_area + year_built + # internal characteristics
+                     dist_parkm + dist_libm + dist_cityhallm + dist_hospitalm + dist_historicm, # external / amenities
+                   data = cleaned_props)
+
+summary(mult_reg_int)
+
+```
+
+Scaling all numeric variables to directly compare effect sizes.
+
+```{r prop_mult_reg_scaled}
+scaled_vars <- cleaned_props %>% 
+  select(log_price, dist_to_closest_highwaym, total_area, year_built, dist_parkm, dist_libm, dist_cityhallm, dist_hospitalm, dist_historicm, zip_code) %>% 
+  mutate(across(c(dist_to_closest_highwaym, total_area, year_built, dist_parkm, dist_libm, dist_cityhallm, dist_hospitalm, dist_historicm), scale))
+
+# model with scaled vars and no interactions 
+scaled_mult_reg <- lm(log_price ~ dist_to_closest_highwaym + 
+                 total_area + year_built + # internal characteristics
+                 dist_parkm + dist_libm + dist_cityhallm + dist_hospitalm + dist_historicm + # external / amenities
+                 factor(zip_code), # neighborhood effects (via zip code for now)
+               data = scaled_vars)
+
+summary(scaled_mult_reg)
+
+# model with scaled vars and interaction between dist to closest highway and ZIP
+scaled_mult_reg_int <- lm(log_price ~ dist_to_closest_highwaym * factor(zip_code) + 
+                     total_area + year_built + # internal characteristics
+                     dist_parkm + dist_libm + dist_cityhallm + dist_hospitalm + dist_historicm, # external / amenities
+                   data = scaled_vars)
+
+summary(scaled_mult_reg_int)
+
+```
+
+
+
+# Relationship between Housing Price and other variables
+
+First, I filtered the property data in the following ways.
+
+-   Keep properties whose sale date is between Jan. 1st, 2020 - Dec.31st, 2024
+
+-   Adjust sales prices for inflation
+
+-   Remove properties whose sale price is < \$30,000 and > 5 SD from the mean sale price
+
+-   Remove properties whose total area is < 100 sq. ft.
+
+Then, I calculated each property's distance to the four highways of interest as well as amenities. The amenities that we've looked into so far are parks, libraries, transit stops, schools, City Hall (proxy for the central business district), hospitals, museums, and historic sites. We also included distance to prisons as a disamenity.
+
+We still need to look at sale price's relationship with restaurants and grocery stores (I just need to figure out how to use the google API to do this).
 
 
 
