@@ -1,0 +1,473 @@
+---
+title: "Feature Engineering"
+author: "Luming"
+date: "`r Sys.Date()`"
+output:
+    html_document:
+      code_folding: hide
+---
+
+```{r setup, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
+    fig.align = "center")
+knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
+
+palette5 <- colorRampPalette(c("#1a9988", "#eb5600"))(5)
+library(ggplot2)
+library(tidyverse)
+library(sf)
+library(dplyr)
+library(tidyr)
+library(rlang)  # Needed for `sym()`
+library(patchwork)
+```
+
+## Set Up
+
+```{r quiet = TRUE, results = 'hide'}
+property_EDA <- st_read("Dataset/property_sijia_eda.geojson") %>%
+  st_transform('EPSG:2272')
+
+studyarea_north <- st_read("Dataset/studyarea-sub/studyarea_north.shp") %>%
+  st_transform('EPSG:2272')
+
+studyarea_south <- st_read("Dataset/studyarea-sub/studyarea_south.shp") %>%
+  st_transform('EPSG:2272')
+
+property_highway <- 
+  rbind(
+    property_EDA %>% st_intersection(studyarea_north["geometry"]) %>%
+      mutate(I676 = "north"),
+    property_EDA %>% st_intersection(studyarea_south["geometry"]) %>%
+      mutate(I676 = "south")
+  )
+```
+
+
+```{r}
+property_FE_lm <- property_highway %>%
+  st_drop_geometry() %>%
+  dplyr::select(
+    sale_price.x,
+    I676,
+    distance_to_city_hall,
+    distance_to_nearest_transit,
+    distance_to_nearest_hospital,
+    distance_to_nearest_school,
+    distance_to_nearest_park,
+    distance_to_nearest_water,
+    distance_to_nearest_bikelane,
+    distance_to_I676,
+    nhoods_name,
+    landuse,
+    LPSS_PER1000,
+    HPSS_PER1000,
+    crime_nn1,
+    crime_nn2,
+    crime_nn3,
+    crime_nn4,
+    crime_nn5
+) %>%
+  filter(sale_price.x > 10 & sale_price.x < 1e6)
+```
+
+## Continuous Features
+
+```{r quiet = TRUE}
+numeric_vars <- property_FE_lm %>% 
+    dplyr::select(
+      sale_price.x,
+      distance_to_city_hall,
+      distance_to_nearest_transit,
+      distance_to_nearest_hospital,
+      distance_to_nearest_school,
+      distance_to_nearest_park,
+      distance_to_nearest_water,
+      distance_to_nearest_bikelane,
+      distance_to_I676,
+      crime_nn1,
+      crime_nn2,
+      crime_nn3,
+      crime_nn4,
+      crime_nn5) %>%  # Select only numeric columns
+    colnames()
+
+
+log_transform_and_plot <- function(df) {
+  
+  for (var in numeric_vars) {
+    original_values <- df[[var]]
+    
+    # Handle zero values & NA safely
+    transformed_values <- ifelse(!is.na(original_values) & original_values == 0, 
+                                 log(original_values + 1), 
+                                 log(original_values))
+    
+    # Plot original variable
+    hist(original_values, breaks = 50, main = paste("Original:", var), xlab = var, col = "lightblue")
+    
+    # Plot log-transformed variable
+    hist(transformed_values, breaks = 50, main = paste("Log-transformed:", var), xlab = paste("Log(", var, ")"), col = "orange")
+    
+    par(mfrow = c(1, 2))  # Reset plot layout
+    
+  }
+  
+  # Return dataframe with new log-transformed columns
+  df_new <- df %>%
+    mutate(across(all_of(numeric_vars), 
+                  ~ ifelse(!is.na(.) & . == 0, log(. + 1), log(.)), 
+                  .names = "log_{.col}"))
+  
+  invisible(df_new)
+
+}
+
+# Call the function on your dataset
+log_transform_and_plot(property_FE_lm)
+property_FE_lm_transformed <- log_transform_and_plot(property_FE_lm)
+
+```
+
+
+
+```{r}
+# Get variable names, excluding specified columns
+vars <- property_FE_lm_transformed %>%
+  dplyr::select(-sale_price.x, -log_sale_price.x, -I676) %>%
+  colnames()
+
+# Identify log-transformed variables
+log_vars <- vars[grepl("^log_", vars)]
+
+# Find corresponding original variables by removing "log_" prefix
+original_vars <- gsub("^log_", "", log_vars)
+
+# Compute correlation for original and log-transformed variables
+correlation.cor <- property_FE_lm_transformed %>%
+  dplyr::select(all_of(c(original_vars, log_vars, "log_sale_price.x"))) %>%
+  gather(Variable, Value, -log_sale_price.x) %>%
+  mutate(Type = ifelse(grepl("^log_", Variable), "Log", "Original")) %>%
+  mutate(Variable = gsub("^log_", "", Variable)) %>%
+  group_by(Variable) %>%
+  summarize(
+    Correlation_Original = cor(Value[Type == "Original"], log_sale_price.x[Type == "Original"], use = "complete.obs"),
+    Correlation_Log = cor(Value[Type == "Log"], log_sale_price.x[Type == "Log"], use = "complete.obs")
+  ) %>%
+  ungroup()
+
+correlation.cor
+
+# Loop through variables and create paired plots
+for (i in seq_along(original_vars)) {
+  
+  orig_var <- original_vars[i]  # Original variable name
+  log_var <- log_vars[i]        # Corresponding log-transformed variable
+  
+  # Check if both exist in the dataset
+  if (orig_var %in% colnames(property_FE_lm_transformed) & log_var %in% colnames(property_FE_lm_transformed)) {
+    
+    # Select and reshape data
+    df_plot <- property_FE_lm_transformed %>%
+      dplyr::select(all_of(c(orig_var, log_var, "log_sale_price.x", "I676"))) %>%
+      gather(Variable, Value, -log_sale_price.x, -I676)
+    
+    # Generate the plot
+    p <- ggplot(df_plot, aes(Value, log_sale_price.x, color = factor(I676))) +
+      scale_colour_manual(values = c("#eb5600", "#1a9988")) +
+      geom_point(size = .5) + 
+      geom_smooth(method = "lm", se = FALSE, colour = "black") +
+      facet_wrap(~Variable, ncol = 2, scales = "free") +  # Put original and log version side by side
+      labs(title = "") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 18, face = "bold"),
+            strip.text = element_text(size = 10),
+            axis.text = element_text(size = 8),
+            strip.text.x = element_text(size = 12, face = "italic"),
+            strip.background = element_rect(fill = "transparent", color = "transparent"))
+    
+    # Print the plot
+    print(p)
+    
+    # Optionally save the plot
+    # ggsave(filename = paste0("plot_", orig_var, "_log.png"), plot = p, width = 8, height = 4)
+  }
+}
+```
+
+### Selected variables
+
++ **log_**sale_price.x,
++ distance_to_city_hall,
++ distance_to_nearest_transit,
++ distance_to_nearest_hospital,
++ distance_to_nearest_school,
++ **log_**distance_to_nearest_park,
++ distance_to_nearest_water,
++ **log_**distance_to_nearest_bikelane,
++ distance_to_I676,
++ crime_nn5
+
+```{r}
+# stat <- correlation.cor_selected %>% 
+#   rowwise() %>%
+#   mutate(
+#     Mean = ifelse(Field.Name %in% selected_vars, round(mean(stat_philly_data[[Field.Name]], na.rm = TRUE), 3), NA),
+#     StDev = ifelse(Field.Name %in% selected_vars, round(sd(stat_philly_data[[Field.Name]], na.rm = TRUE), 3), NA),
+#     Min = ifelse(Field.Name %in% selected_vars, round(min(stat_philly_data[[Field.Name]], na.rm = TRUE), 3), NA),
+#     Max = ifelse(Field.Name %in% selected_vars, round(max(stat_philly_data[[Field.Name]], na.rm = TRUE), 3), NA)
+#   ) %>%
+#   ungroup()
+```
+
+```{r fig.height=8, fig.width=12}
+property_FE_lm_selected <- property_FE_lm_transformed %>%
+  dplyr::select(sale_price.x, I676,
+                distance_to_city_hall,
+                distance_to_nearest_transit,
+                distance_to_nearest_hospital,
+                distance_to_nearest_school,
+                log_distance_to_nearest_park,
+                distance_to_nearest_water,
+                log_distance_to_nearest_bikelane,
+                distance_to_I676,
+                crime_nn5)
+
+# plot correlation
+correlation.long <- property_FE_lm_selected %>%
+  gather(Variable, Value, -sale_price.x, -I676)
+
+correlation.cor_selected <-
+  correlation.long %>%
+  group_by(Variable) %>%
+  summarize(correlation = cor(Value, sale_price.x, use = "complete.obs"))
+    
+ggplot(correlation.long, aes(Value, sale_price.x, color = factor(I676))) +
+  geom_point(size = 0.1) +
+  scale_colour_manual(values = c("#eb5600", "#1a9988")) +
+  geom_text(data = correlation.cor_selected, aes(label = paste("r =", round(correlation, 2))),
+            inherit.aes = FALSE,
+            x=-Inf, y=-Inf, vjust = -1, hjust = -.5) +
+  geom_smooth(method = "lm", se = FALSE, colour = 'black') +
+  facet_wrap(~Variable, ncol = 4, scales = "free") +
+  labs(title = "Sales Price as a Function of Continuous Features",
+       caption = "Figure ",
+       y = "Sales Price ($)",
+       x = "Values of Continuous Features") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 18, face = "bold"),
+        legend.position = "none",
+        # panel.border = element_rect(colour = "black", fill=NA, size=1),
+        strip.text = element_text(size=10),
+        axis.text = element_text(size=8),
+        strip.text.x = element_text(size = 12,face="italic"),
+        strip.background = element_rect(fill = "transparent", color = "transparent"),)
+```
+
+
+```{r fig.height=8, fig.width=12}
+property_FE_lm_selected <- property_FE_lm_transformed %>%
+  dplyr::select(log_sale_price.x, I676,
+                distance_to_city_hall,
+                distance_to_nearest_transit,
+                distance_to_nearest_hospital,
+                distance_to_nearest_school,
+                log_distance_to_nearest_park,
+                distance_to_nearest_water,
+                log_distance_to_nearest_bikelane,
+                distance_to_I676,
+                crime_nn5)
+
+# plot correlation
+correlation.long <- property_FE_lm_selected %>%
+  gather(Variable, Value, -log_sale_price.x, -I676)
+
+correlation.cor_selected <-
+  correlation.long %>%
+  group_by(Variable) %>%
+  summarize(correlation = cor(Value, log_sale_price.x, use = "complete.obs"))
+    
+ggplot(correlation.long, aes(Value, log_sale_price.x, color = factor(I676))) +
+  geom_point(size = 0.1) +
+  scale_colour_manual(values = c("#eb5600", "#1a9988")) +
+  geom_text(data = correlation.cor_selected, aes(label = paste("r =", round(correlation, 2))),
+            inherit.aes = FALSE,
+            x=-Inf, y=-Inf, vjust = -1, hjust = -.5) +
+  geom_smooth(method = "lm", se = FALSE, colour = 'black') +
+  facet_wrap(~Variable, ncol = 4, scales = "free") +
+  labs(title = "Log-transformed Sales Price as a Function of Continuous Features",
+       caption = "Figure ",
+       y = "Log-transformed Sales Price ($)",
+       x = "Values of Continuous Features") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 18, face = "bold"),
+        legend.position = "none",
+        # panel.border = element_rect(colour = "black", fill=NA, size=1),
+        strip.text = element_text(size=10),
+        axis.text = element_text(size=8),
+        strip.text.x = element_text(size = 12,face="italic"),
+        strip.background = element_rect(fill = "transparent", color = "transparent"),)
+```
+
+
+## Categorical Features
+
+```{r}
+factor_vars <- property_FE_lm_transformed %>% 
+    dplyr::select(
+      nhoods_name,
+      landuse,
+      LPSS_PER1000,
+      HPSS_PER1000) %>%  # Select only numeric columns
+    colnames()
+
+property_FE_lm_transformed <- property_FE_lm_transformed %>%
+  mutate(LPSS_PER1000 = as.factor(LPSS_PER1000),
+             HPSS_PER1000 = as.factor(HPSS_PER1000))
+
+for (var in factor_vars) {
+    count_data <- property_FE_lm_transformed %>%
+      group_by(!!sym(var)) %>%
+      summarise(count = n())
+    
+    mean_price_data <- property_FE_lm_transformed %>%
+      group_by(!!sym(var)) %>%
+      summarise(mean_log_price = mean(log_sale_price.x, na.rm = TRUE))
+    
+    
+    plot1 <- ggplot(count_data, aes(x = !!sym(var), y = count)) +
+      geom_bar(stat = "identity", fill = "#1a9988", alpha = 0.8, width = 0.4) +
+      labs(title = paste("Count of", var)) +
+      theme_minimal() +
+      theme(
+        legend.position = "none", 
+        plot.title = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+    
+    plot2 <- ggplot(mean_price_data, aes(x = !!sym(var), y = mean_log_price)) +
+      geom_bar(stat = "identity", fill = "#eb5600", alpha = 0.8, width = 0.4) +
+      labs(title = paste("Mean Log Price by", var)) +
+      theme_minimal() +
+      theme(
+        legend.position = "none", 
+        plot.title = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      ) 
+
+    
+    print(plot1 | plot2)
+    
+  }
+
+```
+
+### After grouping
+
+```{r}
+property_FE_lm_grouped <- property_FE_lm_transformed %>% 
+  mutate(
+    nhoods_name = case_when(
+      nhoods_name %in% c("CENTER_CITY", "LOGAN_SQUARE") ~ "WEST_PART",
+      TRUE ~ nhoods_name
+    ),
+    landuse = case_when(
+      landuse %in% c("Park/Open Space", "Other/Unknown", "Commercial Business/Professional") ~ "Open Space/Business",
+      landuse %in% c("Commercial Consumer", "Commercial Mixed Residential",
+                     "Industrial", "Transportation", "Culture/Amusement") ~ "Commercial",
+      landuse %in% c("Civic/Institution", "Residential High") ~ "Residential High/Civic",
+      TRUE ~ landuse
+    ),
+    LPSS_PER1000 = case_when(
+      LPSS_PER1000 %in% c("32.6549929", "44.72605293") ~ "low",
+      LPSS_PER1000 %in% c("50.10660981") ~ "mid",
+      LPSS_PER1000 %in% c("60.70941337", "131.86813187") ~ "high"
+    ),
+    HPSS_PER1000 = case_when(
+      HPSS_PER1000 %in% c("4.02271652", "5.59701493") ~ "low",
+      HPSS_PER1000 %in% c("6.61572866") ~ "mid",
+      HPSS_PER1000 %in% c("22.52747253", "7.33287858") ~ "high"
+    )
+  )
+```
+
+```{r}
+for (var in factor_vars) {
+    count_data <- property_FE_lm_grouped %>%
+      group_by(!!sym(var)) %>%
+      summarise(count = n())
+    
+    mean_price_data <- property_FE_lm_grouped %>%
+      group_by(!!sym(var)) %>%
+      summarise(mean_log_price = mean(log_sale_price.x, na.rm = TRUE))
+    
+    
+    plot1 <- ggplot(count_data, aes(x = !!sym(var), y = count)) +
+      geom_bar(stat = "identity", fill = "#1a9988", alpha = 0.8, width = 0.4) +
+      labs(title = paste("Count of", var)) +
+      theme_minimal() +
+      theme(
+        legend.position = "none", 
+        plot.title = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+    
+    plot2 <- ggplot(mean_price_data, aes(x = !!sym(var), y = mean_log_price)) +
+      geom_bar(stat = "identity", fill = "#eb5600", alpha = 0.8, width = 0.4) +
+      labs(title = paste("Mean Log Price by", var)) +
+      theme_minimal() +
+      theme(
+        legend.position = "none", 
+        plot.title = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      ) 
+
+    
+    print(plot1 | plot2)
+    
+  }
+```
+
+### Selected variables
+
++ nhoods_name
++ landuse
++ LPSS_PER1000
++ HPSS_PER1000
+
+```{r}
+plot_list <- list()  # Store all plots
+for (var in factor_vars) {
+    count_data <- property_FE_lm_grouped %>%
+      group_by(!!sym(var)) %>%
+      summarise(count = n())
+    
+    mean_price_data <- property_FE_lm_grouped %>%
+      group_by(!!sym(var)) %>%
+      summarise(mean_log_price = mean(log_sale_price.x, na.rm = TRUE))
+    
+    plot <- ggplot(mean_price_data, aes(x = !!sym(var), y = mean_log_price)) +
+      geom_bar(stat = "identity", fill = "#1a9988", alpha = 0.8, width = 0.3) +
+      labs(title = paste("Mean Log Price by", var)) +
+      theme_minimal() +
+      theme(
+        legend.position = "none", 
+        plot.title = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      ) 
+
+    
+    plot_list[[var]] <- plot
+}
+
+# Arrange plots in a 2x2 grid
+final_plot <- wrap_plots(plot_list) + plot_layout(ncol = 2)
+print(final_plot)
+```
+
+## Summary of Features
