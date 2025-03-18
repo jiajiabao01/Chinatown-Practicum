@@ -1,0 +1,66 @@
+---
+title: "property_philly_cleaned"
+output: html_document
+date: "2025-03-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r property philly cleanup for sale price}
+property_data <- property%>%
+  mutate(sale_date = as.Date(sale_date, format = "%Y-%m-%d")) %>%
+  filter(sale_date >= as.Date("2020-01-01"))%>%
+  filter(!is.na(sale_price), !is.na(total_area))
+
+mean_price <- mean(property_data$sale_price, na.rm = TRUE)
+sd_price <- sd(property_data$sale_price, na.rm = TRUE)
+extreme_outlier <- mean_price + 5 * sd_price
+
+property_data <- property_data %>%
+  filter(sale_price > 30000, sale_price < extreme_outlier)
+#count_below_outlier <- property %>%
+#  filter(sale_price < extreme_outlier) %>%
+#  nrow()
+
+#count_below_outlier2 <- property_studyareatest %>%
+#  filter(sale_price < extreme_outlier) %>%
+#  nrow()
+
+print(count_below_outlier2)
+print(count_below_outlier)
+
+property_data <- property_data %>%
+  filter(total_area >= 100)
+```
+
+```{r philly inflation}
+colnames(cpi_data) <- c("half1", "half2", "cpi_date")
+cpi_long <- cpi_data %>%
+  mutate(
+    Jan = `half1`, Feb = `half1`, Mar = `half1`, Apr = `half1`, May = `half1`, Jun = `half1`,Jul = `half2`, Aug = `half2`, Sep = `half2`, Oct = `half2`, Nov = `half2`, Dec = `half2`) %>%
+  select(-half1, -half2) %>%
+  pivot_longer(cols = -cpi_date, names_to = "Month", values_to = "CPI") %>%
+  mutate(
+    Month = match(Month, month.abb),
+    date = as.Date(paste(cpi_date, Month, "01", sep = "-"))  ) %>%
+  select(date, CPI)
+
+property_data <- property_data %>%
+  filter(sale_date <= as.Date("2024-12-31"))%>%
+  mutate(
+    sale_date = as.Date(sale_date, format = "%Y-%m-%d"), 
+    sale_month = floor_date(sale_date, "month"))%>%
+  left_join(cpi_long, by = c("sale_month" = "date"))%>%
+  mutate(CPI = as.numeric(CPI))%>%
+  mutate(adjusted_sale_price = sale_price * (340.331/CPI)) %>%
+  select(-sale_month)%>%
+  select(-recording_date,  -other_building, 
+         -assessment_date, -mailing_address_2, -market_value_date)%>%
+  relocate(sale_price, adjusted_sale_price, .after = 2)
+
+property_data <- st_transform(property_data, crs = 2272)
+
+st_write(property_data, "property_philly.geojson", driver = "GeoJSON", delete_dsn = TRUE)
+```
