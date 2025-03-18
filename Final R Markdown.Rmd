@@ -32,6 +32,8 @@ library(mapview)
 library(patchwork)
 library(lwgeom)
 library(FNN)
+library(kableExtra)
+library(corrplot)
 
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 ```
