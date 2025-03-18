@@ -15,7 +15,7 @@ editor_options:
     wrap: 72
 ---
 
-```{r setup_general, message = FALSE}
+```{r setup_general, message = FALSE, warning = FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
     fig.align = "center") 
 options(scipen=999)
@@ -29,6 +29,11 @@ library(ggtext)
 library(glue)
 library(leaflet)
 library(mapview)
+library(patchwork)
+library(lwgeom)
+library(FNN)
+
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 ```
 
 ```{r setup_wd, message = FALSE}
@@ -58,6 +63,9 @@ This purpose of this study is to help OTIS **understand the housing market of Ph
 + 2 sub areas
 
 ```{r StudyArea_data, quiet = TRUE, results = 'hide'}
+Philly_blockgroup <- st_read("Dataset/Philly_blockgroup/Philly_blockgroup.shp") %>%
+  st_transform('EPSG:2272')
+
 studyarea <- st_read("Dataset/studyarea/StudyArea.shp") %>%
   st_transform('EPSG:2272')
 
@@ -68,6 +76,12 @@ studyarea_south <- st_read("Dataset/studyarea-sub/studyarea_south.shp") %>%
   st_transform('EPSG:2272')
 
 I_676 <- st_read("Dataset/Highways/I_676.shp") %>%
+  st_transform('EPSG:2272')
+
+discontinuity <- st_read("Dataset/studyarea-sub/discontinuity.shp") %>%
+  st_transform('EPSG:2272')
+
+Chinatown_Stitch <- st_read("Dataset/Chinatown_Stitch/Chinatown_Stitch.shp") %>%
   st_transform('EPSG:2272')
 ```
 
@@ -162,16 +176,165 @@ UseCase
 ## Property Data
 
 + [Philadelphia Properties and Assessment History](https://opendataphilly.org/datasets/philadelphia-properties-and-assessment-history/)
++ [Lans use 2023](https://opendataphilly.org/datasets/land-use/)
+
+```{r property_data, quiet = TRUE, results = 'hide'}
+# property <- st_read("DataWrangling/data/opa_properties_public.geojson") %>%
+#   st_transform('EPSG:2272')
+# 
+# property_studyarea <- st_intersection(property, studyarea)
+# 
+# st_write(property_studyarea %>% st_transform('EPSG:3857'), "Dataset/original_property_studyarea.geojson", driver = "GeoJSON")
+
+property_studyarea <- st_read("Dataset/original_property_studyarea.geojson") %>%
+  st_transform('EPSG: 2272')
+
+landuse <- st_read("Dataset/landuse_clip/Land_Use_ClipLayer.shp") %>%
+  st_transform('EPSG:2272')
+
+landuse_rename <- landuse %>%
+  mutate(landuse = 
+           case_when(
+    C_DIG2DESC == 11 ~ "Residential Low",
+    C_DIG2DESC == 12 ~ "Residential Medium",
+    C_DIG2DESC == 13 ~ "Residential High",
+    C_DIG2DESC == 21 ~ "Commercial Consumer",
+    C_DIG2DESC == 22 ~ "Commercial Business/Professional",
+    C_DIG2DESC == 23 ~ "Commercial Mixed Residential",
+    C_DIG2DESC == 31 ~ "Industrial",
+    C_DIG2DESC == 41 ~ "Civic/Institution",
+    C_DIG2DESC == 51 ~ "Transportation",
+    C_DIG2DESC == 61 ~ "Culture/Amusement",
+    C_DIG2DESC == 62 ~ "Active Recreation",
+    C_DIG2DESC == 71 ~ "Park/Open Space",
+    C_DIG2DESC == 72 ~ "Cemetery",
+    C_DIG2DESC == 81 ~ "Water",
+    C_DIG2DESC == 91 ~ "Vacant",
+    C_DIG2DESC == 92 ~ "Other/Unknown"
+  ))
+```
+
 
 ## Census Data
 
 ## Neighborhood Context
 
 + [PPR Properties](https://opendataphilly.org/datasets/ppr-properties/)
++ [Neighborhoods](https://opendataphilly.org/datasets/philadelphia-neighborhoods/)
++ [Trolley Stations](https://hub.arcgis.com/datasets/dd2afb618d804100867dfe0669383159_0/explore?location=39.956470%2C-75.160382%2C14.19)
++ [Highspeed Stations](https://hub.arcgis.com/datasets/af52d74b872045d0abb4a6bbbb249453_0/explore?location=39.955164%2C-75.153952%2C14.43)
++ [Bike Network](https://opendataphilly.org/datasets/bike-network/)
++ [311 Requests](https://opendataphilly.org/datasets/311-service-and-information-requests/)
+
+```{r neighborhood_wrangle, quiet = TRUE, results = 'hide'}
+nhoods <- 
+  st_read("Dataset/DataWrangle/philadelphia-neighborhoods.geojson") %>%
+  st_transform('EPSG:2272')
+
+park <- 
+  st_read("https://opendata.arcgis.com/datasets/d52445160ab14380a673e5849203eb64_0.geojson") %>%
+  st_transform('EPSG:2272')
+
+metro <- 
+  st_read("https://opendata.arcgis.com/api/v3/datasets/af52d74b872045d0abb4a6bbbb249453_0/downloads/data?format=geojson&spatialRefId=4326") %>%
+  st_transform('EPSG:2272') %>%
+  mutate(Type = "metro")
+
+city_hall <- metro[metro$Station == 'City Hall', 6]
+
+trolley <-
+    st_read("https://opendata.arcgis.com/api/v3/datasets/dd2afb618d804100867dfe0669383159_0/downloads/data?format=geojson&spatialRefId=4326") %>%
+  st_transform('EPSG:2272')
+
+trolley_renamed <- trolley %>%
+  rename(Station = StopName,
+         Route = LineAbbr,
+         Longitude = Lon,
+         Latitude = Lat) %>%
+  mutate(Type = "trolley")
+
+# Combine both datasets into one
+transit <- bind_rows(metro, trolley_renamed)
+
+school <-
+  st_read("https://opendata.arcgis.com/datasets/d46a7e59e2c246c891fbee778759717e_0.geojson") %>%
+  st_transform('EPSG:2272')
+
+hospital <-
+  st_read("Dataset/DataWrangle/DOH_Hospitals202311.geojson") %>%
+  st_transform('EPSG:2272') %>%
+  st_filter(st_union(Philly_blockgroup))
+
+water <-
+  st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Hydrographic_Features_Poly/FeatureServer/1/query?outFields=*&where=1%3D1&f=geojson") %>%
+  st_transform('EPSG:2272')
+
+bike_network <- 
+  st_read("Dataset/DataWrangle/Bike_Network.geojson") %>%
+  st_transform('EPSG:2272')
+
+phillyCrimes <- 
+  st_read("Dataset/DataWrangle/phillyCrimes.geojson") %>%
+  st_transform('EPSG:2272')
+
+# LPSS_PER1000: Number of low-produce supply stores per 1,000 people
+# HPSS_PER1000: Number of high-produce supply stores per 1,000 people
+retail <-
+  st_read("https://opendata.arcgis.com/datasets/53b8a1c653a74c92b2de23a5d7bf04a0_0.geojson") %>%
+  st_transform('EPSG:2272')
+```
+
+
+```{r neighborhood_process}
+calculate_nearest_distance <- function(set_points, other_layer) {
+  nearest_idx <- st_nearest_feature(set_points, other_layer)
+  st_distance(set_points, other_layer[nearest_idx, ], by_element = TRUE) %>% as.numeric()
+}
+
+Luming_property <- property_studyarea %>%
+  dplyr::select(objectid, geometry, sale_price) %>%
+  rename(orig_objectid = objectid)
+
+Luming_property <- Luming_property %>%
+  mutate(distance_to_city_hall = st_distance(., city_hall) %>% as.numeric()) %>%
+  mutate(
+    distance_to_nearest_transit = calculate_nearest_distance(geometry, transit),
+    distance_to_nearest_hospital = calculate_nearest_distance(geometry, hospital),
+    distance_to_nearest_school = calculate_nearest_distance(geometry, school),
+    distance_to_nearest_park = calculate_nearest_distance(geometry, park),
+    distance_to_nearest_water = calculate_nearest_distance(geometry, water),
+    distance_to_nearest_bikelane = calculate_nearest_distance(geometry, bike_network),
+    distance_to_I676 = calculate_nearest_distance(geometry, I_676)
+  ) %>%
+  st_join(nhoods["NAME"], left = TRUE) %>%
+  rename(nhoods_name = NAME) %>%
+  st_join(landuse_rename["landuse"], left = TRUE) %>%
+  st_join(retail[, c("LPSS_PER1000", "HPSS_PER1000")], left = TRUE)
+
+Luming_property <- Luming_property %>% 
+    mutate(
+      crime_nn1 = nn_function(st_coordinates(Luming_property),
+                              st_coordinates(phillyCrimes), k = 1),
+
+      crime_nn2 = nn_function(st_coordinates(Luming_property),
+                              st_coordinates(phillyCrimes), k = 2),
+
+      crime_nn3 = nn_function(st_coordinates(Luming_property),
+                              st_coordinates(phillyCrimes), k = 3),
+
+      crime_nn4 = nn_function(st_coordinates(Luming_property),
+                              st_coordinates(phillyCrimes), k = 4),
+      
+      crime_nn5 = nn_function(st_coordinates(Luming_property), 
+                              st_coordinates(phillyCrimes), k = 5))
+```
+
 
 ## Social Survey
 
 ## POI Data
+
+
 
 # Exploratory Data Analysis
 
@@ -198,7 +361,105 @@ property_EDA_update <-
 
 ## Basic Geography
 
+```{r BasicGeo_data}
+park_valid <- st_make_valid(park)
+transit_valid <- st_make_valid(transit)
+city_hall_valid <- st_make_valid(city_hall)
+school_valid <- st_make_valid(school)
+water_valid <- st_make_valid(water)
+bike_network_valid <- st_make_valid(bike_network)
+
+# Clip each dataset to the study area
+park_clipped <- st_intersection(park_valid, studyarea)
+transit_clipped <- st_intersection(transit_valid, studyarea)
+city_hall_clipped <- st_intersection(city_hall_valid, studyarea)
+school_clipped <- st_intersection(school_valid, studyarea)
+water_clipped <- st_intersection(water_valid, studyarea)
+bike_network_clipped <- st_intersection(bike_network_valid, studyarea)
+
+property_vacant <- property_EDA %>%
+  filter(category_code_description %in% c("VACANT LAND","SINGLE FAMILY", "VACANT LAND - NON-RESIDENTIAL")) %>%
+  mutate(category_code_description = case_when(
+    category_code_description == "VACANT LAND - NON-RESIDENTIAL" ~ "VACANT LAND",
+    TRUE ~ category_code_description
+  ))
+```
+
+```{r BasicGeo_plot}
+landuse_colors <- c(
+  "Residential Low" = "#FFFFB3",
+  "Residential Medium" = "#FFEB8B",
+  "Residential High" = "#FFCC80",
+  "Commercial Consumer" = "#FFB3B3",
+  "Commercial Business/Professional" = "#FF9980",
+  "Commercial Mixed Residential" = "#FF6666",
+  "Industrial" = "#D6A3FF",
+  "Civic/Institution" = "#66B3FF",
+  "Transportation" = "gray95",
+  "Culture/Amusement" = "#C1FFC1",
+  "Active Recreation" = "#66FFD9",     
+  "Park/Open Space" = "#99FF66",        
+  "Cemetery" = "#FF9999",               
+  "Water" = "#99CCFF",            
+  "Vacant" = "#D3D3D3", 
+  "Other/Unknown" = "gray25"
+)
+
+BasicGeo_plot1 <- ggplot(data = landuse_rename%>% filter(!is.na(landuse))) +
+  geom_sf(aes(fill = landuse), color=NA) +
+  scale_fill_manual(values = landuse_colors,na.value = "white") +
+  labs(title = "Chinatown Land Use", fill = "Category") +
+  theme_void() +
+  theme(legend.position = "right",
+        legend.key.size = unit(0.5, "cm"),
+        legend.text = element_text(size = 8))
+
+BasicGeo_plot2 <- ggplot() +
+  geom_sf(data = landuse, fill = "white", color = "gray85", size = 0.05) +
+  
+  geom_sf(data = park_clipped, aes(fill = "Park"), color = NA, alpha = 1) +
+  
+  geom_sf(data = transit_clipped, aes(color = "Transit"), size = 4) +
+  
+  #geom_sf(data = city_hall_clipped, aes(color = "City Hall"), size = 5, shape = 16) +
+
+  geom_sf(data = school_clipped, aes(color = "School"), size = 4) +
+
+  geom_sf(data = bike_network_clipped, aes(color = "Bike Network"), size = 1) +
+  
+  scale_color_manual(values = c("Transit" = "#66B3FF", "School" = "#FF9980", "Bike Network" = "#D6A3FF"), name = NULL) +
+  scale_fill_manual(values = c("Park" = "#99FF66"), name = NULL) +
+  labs(title = "Chinatown Infrastructures") +
+  theme_void() +
+  theme(legend.position = "right",
+        legend.key.size = unit(0.5, "cm"),
+        legend.text = element_text(size = 8))
+
+BasicGeo_plot3 <- ggplot() +
+  geom_sf(data = landuse, fill = "white", color = "gray85", size = 0.05) +
+  geom_sf(data = studyarea, fill = "transparent", color = "grey", linetype = "dashed", linewidth = 2) +
+  geom_sf(data = discontinuity, fill = "#eb5600", color = "transparent") +
+  geom_sf(data = Chinatown_Stitch, fill = "#1a9988", alpha = 0.8) +
+  geom_sf(data = property_vacant, aes(color = category_code_description), size = 1) +
+  scale_colour_manual(values = c("black", "#B67352")) +
+  labs(title="Potential Lands",
+       subtitle = glue("<span style='color:#1a1a1a;'>Single Family & </span><span style='color:#B67352;'>Vacant Land</span>"),
+       # caption = "Figure "
+       ) +
+  theme_void() +
+  theme(legend.position = "none",
+        plot.title = element_text(size = 18, face = "bold"),
+        plot.subtitle = ggtext::element_markdown(size = 12))
+
+BasicGeo_plot1
+BasicGeo_plot2
+BasicGeo_plot3
+```
+
+
 ## Sales Price Change
+
+(insert picture)
 
 ## Discontinuity Effects
 
