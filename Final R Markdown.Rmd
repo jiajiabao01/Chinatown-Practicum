@@ -42,6 +42,10 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 # Change to your own workspace
 knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
 wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
+
+# for Aki
+knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
+wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
 ```
 
 
