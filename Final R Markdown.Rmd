@@ -72,6 +72,9 @@ This purpose of this study is to help OTIS **understand the housing market of Ph
 Philly_blockgroup <- st_read("Dataset/Philly_blockgroup/Philly_blockgroup.shp") %>%
   st_transform('EPSG:2272')
 
+# philly bounds
+philly_bounds <- st_union(Philly_blockgroup)
+
 studyarea <- st_read("Dataset/studyarea/StudyArea.shp") %>%
   st_transform('EPSG:2272')
 
@@ -90,6 +93,16 @@ discontinuity <- st_read("Dataset/studyarea-sub/discontinuity.shp") %>%
 Chinatown_Stitch <- st_read("Dataset/Chinatown_Stitch/Chinatown_Stitch.shp") %>%
   st_transform('EPSG:2272')
 ```
+
+```{r LoadOtherData}
+# philly hydrology for mapping (bounded by philly_bounds; source: https://opendataphilly.org/datasets/hydrology/)
+hydro <- st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Hydrographic_Features_Poly/FeatureServer/1/query?outFields=*&where=1%3D1&f=geojson") %>% 
+    st_transform(crs = 'EPSG:2272') %>% 
+  st_intersection(philly_bounds)
+
+
+```
+
 
 ```{r UseCase_data, quiet = TRUE, results = 'hide'}
 studyarea_4326 <- st_transform(studyarea, crs = 4326)
