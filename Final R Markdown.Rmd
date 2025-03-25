@@ -15,6 +15,15 @@ editor_options:
     wrap: 72
 ---
 
+```{css format, echo = FALSE}
+.center-leaflet {
+  display: flex;
+  justify-content: center;
+}
+
+```
+
+
 ```{r setup_general, message = FALSE, warning = FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
     fig.align = "center") 
@@ -34,6 +43,8 @@ library(lwgeom)
 library(FNN)
 library(kableExtra)
 library(corrplot)
+library(htmltools)  # For div() function
+library(knitr) # insert images
 
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 ```
@@ -44,8 +55,8 @@ knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
 wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
 
 # for Aki
-knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
-wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
+# knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
+# wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
 ```
 
 
@@ -59,14 +70,9 @@ Standing in opposition to the issues, **City of Philadelphia Office of Transport
 
 This purpose of this study is to help OTIS **understand the housing market of Philadelphia Chinatown region before and after the implementation of the Chinatown Stitch**. The first part of the study will focus the effects of highways on sales prices in the study region as well as the entire Philadelphia. House prices will then be estimated using **three predictive models under three different future scenarios**: business as usual without the implementation of the Chinatown Stitch, business as usual with the implementation of the Chinatown Stitch, and an alternative future in which the Chinatown Stitch significantly reshapes the urban landscape of the study region.
 
-
-(insert pictures)
+![](Final R Markdown/Images/background.png)
 
 ## Study Area
-
-+ Philadelphia (case studies)
-+ (3 block groups)
-+ 2 sub areas
 
 ```{r StudyArea_data, quiet = TRUE, results = 'hide'}
 Philly_blockgroup <- st_read("Dataset/Philly_blockgroup/Philly_blockgroup.shp") %>%
@@ -76,6 +82,9 @@ Philly_blockgroup <- st_read("Dataset/Philly_blockgroup/Philly_blockgroup.shp") 
 philly_bounds <- st_union(Philly_blockgroup)
 
 studyarea <- st_read("Dataset/studyarea/StudyArea.shp") %>%
+  st_transform('EPSG:2272')
+
+studyarea_blockgroup <- st_read("Dataset/studyarea/StudyArea_blockgroup_tract.shp") %>%
   st_transform('EPSG:2272')
 
 studyarea_north <- st_read("Dataset/studyarea-sub/studyarea_north.shp") %>%
@@ -92,14 +101,56 @@ discontinuity <- st_read("Dataset/studyarea-sub/discontinuity.shp") %>%
 
 Chinatown_Stitch <- st_read("Dataset/Chinatown_Stitch/Chinatown_Stitch.shp") %>%
   st_transform('EPSG:2272')
-```
 
-```{r LoadOtherData}
+property_original <- st_read("Dataset/original_property_studyarea.geojson") %>%
+  st_transform('EPSG:2272')
+
+property_north <- property_original %>%
+  st_intersection(studyarea_north)
+
+property_south <- property_original %>%
+  st_intersection(studyarea_south)
+
 # philly hydrology for mapping (bounded by philly_bounds; source: https://opendataphilly.org/datasets/hydrology/)
 hydro <- st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Hydrographic_Features_Poly/FeatureServer/1/query?outFields=*&where=1%3D1&f=geojson") %>% 
     st_transform(crs = 'EPSG:2272') %>% 
   st_intersection(philly_bounds)
+```
 
+
+Three study areas are used in the analysis to reveal the effects of I-676 on the land market of the Chinatown region.
+
++ **Referable study area (Philadelphia):** to analyse the impact of different highways on the surrounding land markets in the context of the city.
++ **Main study area (10 block groups):** to figure out the correlation between I-676 and property sales price and make future predictions based on three potential scenarios.
++ **Compared study area (north and south sides):** to investigate the different situations of the Chinatown region under the construction of I-676.
+
+
+```{r StudyArea_plot}
+StudyArea_plot1 <- ggplot() +
+  geom_sf(data = Philly_blockgroup, fill = "transparent", color = "grey90", linewidth = .2) +
+  geom_sf(data = studyarea, fill = "#eb5600", color = "#eb5600") +
+  geom_sf(data = hydro, fill = "#DFF3E3", color = "transparent") +
+  geom_sf(data = philly_bounds, fill = "transparent", color = "grey60", linewidth = 1, linetype = "dashed") +
+  theme_void() +
+  labs(title = "Three Study Areas:",
+       subtitle = "Philadelphia | 10 Block Groups around the Chinatown Stitch | North and South Sides",
+       caption = "Source: ACS Census Data and OPA Data.") +
+  theme(plot.title = element_text(size = 16, face = "bold",margin = margin(b = 6)),
+        plot.subtitle = element_text(margin = margin(b = 10)),
+        plot.caption = element_text(hjust = 0, margin = margin(t = 10)))
+
+StudyArea_plot2 <- ggplot() +
+  geom_sf(data = studyarea_north, fill = alpha("#eb5600", .1), color = "transparent") +
+  geom_sf(data = studyarea_south, fill = alpha("#1a9988", .1), color = "transparent") +
+  # geom_sf(data = discontinuity, fill = "black", color = "transparent") +
+  geom_sf(data = Chinatown_Stitch, fill = "grey", color = "transparent", linetype = "dashed", linewidth = 1) +
+  geom_sf(data = studyarea_blockgroup, fill = "transparent", color = "grey", linewidth = .8, linetype = "dashed") +
+  geom_sf(data = property_north, color = "#eb5600", size = .6) +
+  geom_sf(data = property_south, color = "#1a9988", size = .6) +
+  geom_sf(data = studyarea, fill = "transparent", color = "grey60", linewidth = 1.2, linetype = "dashed") +
+  theme_void()
+
+StudyArea_plot1 | StudyArea_plot2
 
 ```
 
@@ -119,11 +170,11 @@ landuse_4326 <- st_read("Dataset/landuse_clip/Land_Use_ClipLayer.shp") %>%
 landuse_4326_plot <- landuse_4326 %>%
   filter(C_DIG2DESC != 51 & C_DIG2DESC != 71)
 
-landuse_park <- landuse_4326 %>%
-  filter(C_DIG2DESC == 71)
-
 landuse_park_ing <- landuse_4326 %>%
   filter(OBJECTID_1 == 514214)
+
+park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
+  st_transform('EPSG:4326')
 
 nhoods_4326 <- 
   st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>%
@@ -133,6 +184,7 @@ Chinatown_Callowhill <- nhoods_4326 %>%
   filter(NAME %in% c("CHINATOWN", "CALLOWHILL"))
 ```
 
+In the vision of **a city park** in the future, the Chinatown Stitch will bring vitality to local residents and visitors along with other green spaces. Connected with the Stitch, the **Rail Park** in the <span style="color: #eb5600;">north (Callowhill neighborhood)</span> is still in construction and will make an impact years later. With a foundation of **cultural and commercial resources**, the <span style="color: #1a9988;">southern part (Chinatown neighborhood)</span> will provide services to the surrounding area, including the city center of Philadelphia.
 
 ```{r UseCase_plot}
 UseCase <- leaflet() %>%
@@ -154,7 +206,7 @@ UseCase <- leaflet() %>%
               dashArray = "5,5",
               fillColor = "#eb5600",
               fillOpacity = 0.1) %>%
-  addPolygons(data = landuse_park,
+  addPolygons(data = park,
               color = "#1a9988",
               weight = 1,
               fillOpacity = 0.6,
@@ -182,13 +234,31 @@ UseCase <- leaflet() %>%
     lng2 = bbox$xmax, 
     lat2 = bbox$ymax
   )
-UseCase
+
+div(class = "center-leaflet", UseCase)
+```
+
+```{r StudyArea_pictures, echo=FALSE}
+# Create a table with images and captions
+kable(
+  data.frame(
+    Callowhill = c("![](Final R Markdown/Images/Callowhill.png){height=350px}", "Callowhill"),
+    Chinatown = c("![](Final R Markdown/Images/Chinatown.png){height=350px}", "Chinatown")
+  ),
+  format = "html",
+  align = "c",
+  col.names = NULL
+) %>%
+  kable_styling(position = "center")
+
 ```
 
 
 ## Methodology
 
-![*Methodology*](Final R Markdown/Images/methodology.png)
+To achieve the goal of **a data-rich story map**, the methodology is structured around **a robust model construction process**. By incorporating illustrative data visualizations throughout the data analysis, the story map features engaging maps and compelling narratives.
+
+![](Final R Markdown/Images/methodology.png)
 
 # Data Wrangling
 
@@ -377,6 +447,8 @@ property_EDA_update <-
   )
 ```
 
+## Philadelphia City Scale Analysis
+
 
 ## Basic Geography
 
@@ -520,7 +592,6 @@ ggplot(discontinuity_plot, aes(x = distance_to_highway, y = log_sale_price, colo
 ```
 
 
-## Case Studies
 
 ## Feature Engineering
 
@@ -533,3 +604,7 @@ ggplot(discontinuity_plot, aes(x = distance_to_highway, y = log_sale_price, colo
 
 
 # Predictive Modeling
+
+# Scenario Planning
+
+## Case Studies
