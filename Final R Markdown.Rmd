@@ -51,12 +51,12 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 
 ```{r setup_wd, message = FALSE}
 # Change to your own workspace
-knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
-wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
+# knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
+# wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
 
 # for Aki
-# knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
-# wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
+knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
+wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
 ```
 
 
@@ -181,8 +181,8 @@ park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
   st_transform('EPSG:4326')
 
 nhoods_4326 <- 
-  st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>%
-  # st_read("data/philadelphia-neighborhoods.geojson") %>%
+  # st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>%
+  st_read("data/philadelphia-neighborhoods.geojson") %>%
   st_transform('EPSG:4326')
 
 Chinatown_Callowhill <- nhoods_4326 %>%
@@ -464,64 +464,95 @@ Before jumping into modeling, we first explored the relationship between distanc
 buff500 <- 500 * 3.28084
 hiway_500buff <- st_union(st_buffer(philly_highways, buff500))
 
-properties500 <- philly_properties[hiway_500buff,] %>% 
-  mutate(price_perTLA = adjusted_sale_price / total_livable_area,
-         price_perTA = adjusted_sale_price / total_area,
-         log_price = log(adjusted_sale_price),
-         log_price_perTLA = log(price_perTLA),
-         log_price_perTA = log(price_perTA),
-         dist_to_US001 = calculate_nearest_distance(geometry,
-                                     philly_highways %>%
-                                       filter(ST_RT_NO == "0001")),
-         dist_to_I076 = calculate_nearest_distance(geometry,
-                                    philly_highways %>%
-                                      filter(ST_RT_NO == "0076")),
-         dist_to_I095 = calculate_nearest_distance(geometry,
-                                    philly_highways %>%
-                                      filter(ST_RT_NO == "0095")),
-         dist_to_I676 = calculate_nearest_distance(geometry,
-                                    philly_highways %>%
-                                      filter(ST_RT_NO == "0676")),
-         dist_to_US001m = dist_to_US001 * 0.3048,
-         dist_to_I076m = dist_to_I076 * 0.3048,
-         dist_to_I095m = dist_to_I095 * 0.3048,
-         dist_to_I676m = dist_to_I676 * 0.3048)
-
-prop500_closest <- properties500 %>%
-  select(matches("objectid|dist_to")) %>%
-  pivot_longer(cols = 2:5,
-               names_to = "highway",
-               values_to = "distance") %>%
-  group_by(objectid) %>%
-  summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>%
-  ungroup()  %>%
-  mutate(dist_to_closest_highwaym = dist_to_closest_highway * 0.3048)
-
-# join closest highway
-prop500 <- left_join(properties500,
-                     prop500_closest %>% st_drop_geometry(),
-                     by = "objectid") %>%
-  mutate(closest_highway = case_when(
-    dist_to_closest_highway == dist_to_US001 ~ "US-1",
-    dist_to_closest_highway == dist_to_I076 ~ "I-76",
-    dist_to_closest_highway == dist_to_I095 ~ "I-95",
-    dist_to_closest_highway == dist_to_I676 ~ "I-676",
-    .default = NA),
-    closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")),
-    highway_type = case_when(closest_highway %in% c("US-1","I-676") ~ "through neighborhood",
-                             closest_highway %in% c("I-95","I-76") ~ "along waterway",
-                             .default = NA))
+# adding distance to highway and log price variables
+# properties500 <- philly_properties[hiway_500buff,] %>% 
+#   mutate(price_perTLA = adjusted_sale_price / total_livable_area,
+#          price_perTA = adjusted_sale_price / total_area,
+#          log_price = log(adjusted_sale_price),
+#          log_price_perTLA = log(price_perTLA),
+#          log_price_perTA = log(price_perTA),
+#          dist_to_US001 = calculate_nearest_distance(geometry,
+#                                      philly_highways %>%
+#                                        filter(ST_RT_NO == "0001")),
+#          dist_to_I076 = calculate_nearest_distance(geometry,
+#                                     philly_highways %>%
+#                                       filter(ST_RT_NO == "0076")),
+#          dist_to_I095 = calculate_nearest_distance(geometry,
+#                                     philly_highways %>%
+#                                       filter(ST_RT_NO == "0095")),
+#          dist_to_I676 = calculate_nearest_distance(geometry,
+#                                     philly_highways %>%
+#                                       filter(ST_RT_NO == "0676")),
+#          dist_to_US001m = dist_to_US001 * 0.3048,
+#          dist_to_I076m = dist_to_I076 * 0.3048,
+#          dist_to_I095m = dist_to_I095 * 0.3048,
+#          dist_to_I676m = dist_to_I676 * 0.3048)
+# 
+# prop500_closest <- properties500 %>%
+#   select(matches("objectid|dist_to")) %>%
+#   pivot_longer(cols = 2:5,
+#                names_to = "highway",
+#                values_to = "distance") %>%
+#   group_by(objectid) %>%
+#   summarise(dist_to_closest_highway = min(distance, na.rm = T)) %>%
+#   ungroup()  %>%
+#   mutate(dist_to_closest_highwaym = dist_to_closest_highway * 0.3048)
+# 
+# # join closest highway
+# prop500 <- left_join(properties500,
+#                      prop500_closest %>% st_drop_geometry(),
+#                      by = "objectid") %>%
+#   mutate(closest_highway = case_when(
+#     dist_to_closest_highway == dist_to_US001 ~ "US-1",
+#     dist_to_closest_highway == dist_to_I076 ~ "I-76",
+#     dist_to_closest_highway == dist_to_I095 ~ "I-95",
+#     dist_to_closest_highway == dist_to_I676 ~ "I-676",
+#     .default = NA),
+#     closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")),
+#     highway_type = case_when(closest_highway %in% c("US-1","I-676") ~ "through neighborhood",
+#                              closest_highway %in% c("I-95","I-76") ~ "along waterway",
+#                              .default = NA))
 
 # save output and read in the prefiltered to save time
-# st_write(prop500, "data/philly_prop500_dst2hghwy_250318.geojson")
+# st_write(prop500, "data/philly_prop500_dst2hghwy_250325.geojson")
 
 # read in pre-saved file
-# prop500 <- st_read("data/philly_prop500_dst2hghwy_250318.geojson") %>% 
-#   mutate(closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")))
+prop500 <- st_read("data/philly_prop500_dst2hghwy_250325.geojson") %>%
+  mutate(closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")))
 
 ```
 
+```{r prop500_faceted}
+prop500_faceted <- 
+  ggplot(data = prop500,
+         aes(x = log_price_perTA, color = closest_highway, fill = closest_highway)) +
+  geom_histogram(bins = 50, show.legend = F) +
+  facet_wrap(~closest_highway, scales = "free_y") +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#eba075",
+                                "I-676" = "#7fe3d6")) +
+  scale_fill_manual(values = c("US-1" = "#1a9988",
+                               "I-76" = "#eb5600",
+                               "I-95" = "#eba075",
+                               "I-676" = "#7fe3d6")) +
+  labs(title = "Distribution of Property Sale Price",
+       subtitle = "Split by Closest Highway",
+       x = "Log Sale Price (per Total Area)",
+       y = "Count") +
+  theme_minimal()
 
+prop500_faceted
+
+```
+```{r prop500_med_saleprices}
+# median sale prices to talk about in the text
+med_price_us1 <- median(prop500 %>% 
+                          filter(closest_highway == ""))
+
+```
+
+From this distribution of log sale prices, 
 
 
 ## Basic Geography
