@@ -178,6 +178,7 @@ park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
 
 nhoods_4326 <- 
   st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>%
+  # st_read("data/philadelphia-neighborhoods.geojson") %>%
   st_transform('EPSG:4326')
 
 Chinatown_Callowhill <- nhoods_4326 %>%
