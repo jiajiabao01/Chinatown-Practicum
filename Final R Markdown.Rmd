@@ -115,6 +115,9 @@ property_south <- property_original %>%
 hydro <- st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Hydrographic_Features_Poly/FeatureServer/1/query?outFields=*&where=1%3D1&f=geojson") %>% 
     st_transform(crs = 'EPSG:2272') %>% 
   st_intersection(philly_bounds)
+
+philly_highways <- st_read("Dataset/Highways/Casestudy_Highways.shp")
+
 ```
 
 
@@ -302,6 +305,10 @@ landuse_rename <- landuse %>%
     C_DIG2DESC == 91 ~ "Vacant",
     C_DIG2DESC == 92 ~ "Other/Unknown"
   ))
+
+# philly properties (from Sijia)
+# from the last 5 years, inflation-adjusted prices, total area > 100 sq ft, prices > 30,000, outliers above 5 SD from the mean were removed
+philly_properties <- st_read("data/property_philly_250318.geojson")
 ```
 
 
