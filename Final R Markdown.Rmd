@@ -265,6 +265,16 @@ To achieve the goal of **a data-rich story map**, the methodology is structured 
 
 ![](Final R Markdown/Images/methodology.png)
 
+TODO: include description of qualitative analysis
+
+# Summary of Qualitative Research
+
+## Highway effects on Property Price
+
+
+## Case Studies of Other Highway Caps
+
+
 # Data Wrangling
 
 ## Property Data
@@ -522,6 +532,36 @@ prop500 <- st_read("data/philly_prop500_dst2hghwy_250325.geojson") %>%
 
 ```
 
+```{r map_prop500}
+# map of properties within 500m of highway cored by which highway they're closest to
+ggplot() +
+  geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+  geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+  geom_sf(data = park, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = hiway_500buff,
+          color = "transparent", fill = "grey", alpha = 0.4) +
+  geom_sf(data = prop500,
+          aes(color = closest_highway), size = 0.3) +
+  geom_sf(data = philly_highways,
+          color = "black") +
+  
+  # add custom colors
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#eba075",
+                                "I-676" = "#7fe3d6")) +
+  
+  labs(title = "Properties within 500m of Highways in Philly",
+       subtitle = "US-1, I-76, I-95, and I-676",
+       color = "Closest Highway") +
+  theme_void()
+
+# TODO: 
+# get rid of legend, put highway labels on the map
+
+```
+
+
 ```{r prop500_faceted}
 prop500_faceted <- 
   ggplot(data = prop500,
@@ -547,12 +587,241 @@ prop500_faceted
 ```
 ```{r prop500_med_saleprices}
 # median sale prices to talk about in the text
-med_price_us1 <- median(prop500 %>% 
-                          filter(closest_highway == ""))
+med_price_us1 <- round(median(prop500 %>% 
+                          filter(closest_highway == "US-1") %>% 
+                          pull(adjusted_sale_price)))
+
+med_price_i76 <- round(median(prop500 %>% 
+                          filter(closest_highway == "I-76") %>% 
+                          pull(adjusted_sale_price)))
+
+med_price_i95 <- round(median(prop500 %>% 
+                          filter(closest_highway == "I-95") %>% 
+                          pull(adjusted_sale_price)))
+
+med_price_676 <- round(median(prop500 %>% 
+                          filter(closest_highway == "I-676") %>% 
+                          pull(adjusted_sale_price)))
 
 ```
 
-From this distribution of log sale prices, 
+We see that the distribution of log sale prices of properties within 500m of highways in Philadelphia generally follow a normal distribution. Though there aren't as many properties near I-676 as other there are near the other highways, properties are most expensive here with a median property price of `r paste0('$', substr(med_price_676, 1, 3), ',', substr(med_price_676, 4, 9))`. Properties near I-95 and I-76 are among a similar range of prices with median property prices being `r paste0('$', substr(med_price_i95, 1, 3), ',', substr(med_price_i95, 4, 9))` and `r paste0('$', substr(med_price_i76, 1, 3), ',', substr(med_price_i76, 4, 9))`, respectively, though there are almost five times as many properties near I-95 compared to I-76. Finally, there are many properties within 500m of US-1, but the median property price was lowest compared to other highways at `r paste0('$', substr(med_price_us1, 1, 3), ',', substr(med_price_us1, 4, 9))`.
+
+```{r prop500_scatter}
+# simple scatter of price (as log price per total area in sq ft) and dist2closesthighway
+cor_us1 <- round(cor(prop500 %>% 
+                 filter(grepl("US", closest_highway)) %>% 
+                 pull(log_price_perTA), 
+               prop500 %>% 
+                 filter(grepl("US", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i76 <- round(cor(prop500 %>% 
+                 filter(grepl("I-76", closest_highway)) %>% 
+                 pull(log_price_perTA), 
+               prop500 %>% 
+                 filter(grepl("I-76", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i95 <- round(cor(prop500 %>% 
+                 filter(grepl("I-95", closest_highway)) %>% 
+                 pull(log_price_perTA), 
+               prop500 %>% 
+                 filter(grepl("I-95", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i676 <- round(cor(prop500 %>% 
+                  filter(grepl("I-676", closest_highway)) %>% 
+                  pull(log_price_perTA), 
+                prop500 %>% 
+                  filter(grepl("I-676", closest_highway)) %>% 
+                  pull(dist_to_closest_highwaym)), 3)
+
+scatter_4highways <- 
+  ggplot(data = prop500, 
+       aes(x = dist_to_closest_highwaym, y = log_price_perTA, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .2, size = 0.3, show.legend = F) +
+  geom_smooth(method = "lm", size = 1.2, show.legend = F) +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#eba075",
+                                "I-676" = "#7fe3d6")) +
+  scale_fill_manual(values = c("US-1" = "#1a9988",
+                               "I-76" = "#eb5600",
+                               "I-95" = "#eba075",
+                               "I-676" = "#7fe3d6")) +
+  geom_text(aes(label = paste("US-1:", cor_us1),
+                x = 150,
+                y = 1.25),
+            color = "#1a9988",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-76:", cor_i76),
+                x = 350,
+                y = 1.25),
+            color = "#eb5600",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-95:", cor_i95),
+                x = 350,
+                y = 8.75),
+            color = "#eba075",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-676:", cor_i676),
+                x = 150,
+                y = 8.75),
+            color = "#7fe3d6",
+            show.legend = F) +
+  labs(title = "Property Price (log price per TA) as a function of Distance to Closest Highway",
+       subtitle = "Properties within 500m of highways",
+       x = "Distance to Closest Highway (m)",
+       y = "Property Sale Price (log price per TA)") +
+  theme_minimal()
+
+scatter_4highways
+
+```
+From this scatter plot, we see that properties within 500m of I-676 and I-76 follow the expected pattern of increasing property prices as one gets further from the highway (folks want to avoid the noise and air pollution from the highway). The correlation between distance to closest highway (in meters) and Property sale price (log-transformed price per total area) is 0.147 for properties near I-676, meaning for every additional meter away from
+
+```{r prop500_scatter_test1}
+# seeing what it looks like for log_price (wihtout consider total area)
+cor_us1 <- round(cor(prop500 %>% 
+                 filter(grepl("US", closest_highway)) %>% 
+                 pull(log_price), 
+               prop500 %>% 
+                 filter(grepl("US", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i76 <- round(cor(prop500 %>% 
+                 filter(grepl("I-76", closest_highway)) %>% 
+                 pull(log_price), 
+               prop500 %>% 
+                 filter(grepl("I-76", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i95 <- round(cor(prop500 %>% 
+                 filter(grepl("I-95", closest_highway)) %>% 
+                 pull(log_price), 
+               prop500 %>% 
+                 filter(grepl("I-95", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i676 <- round(cor(prop500 %>% 
+                  filter(grepl("I-676", closest_highway)) %>% 
+                  pull(log_price), 
+                prop500 %>% 
+                  filter(grepl("I-676", closest_highway)) %>% 
+                  pull(dist_to_closest_highwaym)), 3)
+
+scatter_4highways <- 
+  ggplot(data = prop500, 
+       aes(x = dist_to_closest_highwaym, y = log_price, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .2, size = 0.3, show.legend = F) +
+  geom_smooth(method = "lm", size = 1.2, show.legend = F) +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#eba075",
+                                "I-676" = "#7fe3d6")) +
+  scale_fill_manual(values = c("US-1" = "#1a9988",
+                               "I-76" = "#eb5600",
+                               "I-95" = "#eba075",
+                               "I-676" = "#7fe3d6")) +
+  geom_text(aes(label = paste("US-1:", cor_us1),
+                x = 150,
+                y = 1.25),
+            color = "#1a9988",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-76:", cor_i76),
+                x = 350,
+                y = 1.25),
+            color = "#eb5600",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-95:", cor_i95),
+                x = 350,
+                y = 8.75),
+            color = "#eba075",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-676:", cor_i676),
+                x = 150,
+                y = 8.75),
+            color = "#7fe3d6",
+            show.legend = F) +
+  labs(title = "Property Price (log price) as a function of Distance to Closest Highway",
+       subtitle = "Properties within 500m of highways",
+       x = "Distance to Closest Highway (m)",
+       y = "Property Sale Price (log price)") +
+  theme_minimal()
+
+scatter_4highways
+```
+
+```{r prop500_scatter_test2}
+# seeing what it looks like for log_price (wihtout consider total area)
+# for residential properties only
+prop500_residential <- prop500 %>% 
+  filter(grepl("APART|MIXED|MULTI|SINGLE", category_code_description))
+
+cor_us1 <- round(cor(prop500_residential %>% 
+                 filter(grepl("US", closest_highway)) %>% 
+                 pull(log_price), 
+               prop500_residential %>% 
+                 filter(grepl("US", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i76 <- round(cor(prop500_residential %>% 
+                 filter(grepl("I-76", closest_highway)) %>% 
+                 pull(log_price), 
+               prop500_residential %>% 
+                 filter(grepl("I-76", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i95 <- round(cor(prop500_residential %>% 
+                 filter(grepl("I-95", closest_highway)) %>% 
+                 pull(log_price), 
+               prop500_residential %>% 
+                 filter(grepl("I-95", closest_highway)) %>% 
+                 pull(dist_to_closest_highwaym)), 3)
+cor_i676 <- round(cor(prop500_residential %>% 
+                  filter(grepl("I-676", closest_highway)) %>% 
+                  pull(log_price), 
+                prop500_residential %>% 
+                  filter(grepl("I-676", closest_highway)) %>% 
+                  pull(dist_to_closest_highwaym)), 3)
+
+scatter_4highways <- 
+  ggplot(data = prop500_residential, 
+       aes(x = dist_to_closest_highwaym, y = log_price, 
+           color = closest_highway, fill = closest_highway)) +
+  geom_point(alpha = .2, size = 0.3, show.legend = F) +
+  geom_smooth(method = "lm", size = 1.2, show.legend = F) +
+  scale_color_manual(values = c("US-1" = "#1a9988",
+                                "I-76" = "#eb5600",
+                                "I-95" = "#eba075",
+                                "I-676" = "#7fe3d6")) +
+  scale_fill_manual(values = c("US-1" = "#1a9988",
+                               "I-76" = "#eb5600",
+                               "I-95" = "#eba075",
+                               "I-676" = "#7fe3d6")) +
+  geom_text(aes(label = paste("US-1:", cor_us1),
+                x = 150,
+                y = 1.25),
+            color = "#1a9988",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-76:", cor_i76),
+                x = 350,
+                y = 1.25),
+            color = "#eb5600",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-95:", cor_i95),
+                x = 350,
+                y = 8.75),
+            color = "#eba075",
+            show.legend = F) +
+  geom_text(aes(label = paste("I-676:", cor_i676),
+                x = 150,
+                y = 8.75),
+            color = "#7fe3d6",
+            show.legend = F) +
+  labs(title = "Property Price (log price) as a function of Distance to Closest Highway",
+       subtitle = "Properties within 500m of highways",
+       x = "Distance to Closest Highway (m)",
+       y = "Property Sale Price (log price)") +
+  theme_minimal()
+
+scatter_4highways
+```
 
 
 ## Basic Geography
