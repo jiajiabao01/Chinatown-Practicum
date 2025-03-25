@@ -51,12 +51,25 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 
 ```{r setup_wd, message = FALSE}
 # Change to your own workspace
-# knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
-# wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
+knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
+wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
 
-# for Aki
-knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
-wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
+# Aki
+# knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
+# wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
+
+nhoods_4326 <- 
+  st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>% # Luming
+  # st_read("data/philadelphia-neighborhoods.geojson") %>% # Aki
+  st_transform('EPSG:4326')
+
+# philly properties (from Sijia)
+# from the last 5 years, inflation-adjusted prices, total area > 100 sq ft, prices > 30,000, outliers above 5 SD from the mean were removed
+# philly_properties <- st_read("data/property_philly_250318.geojson") # Aki
+philly_properties <- st_read("DataWrangling/data/property_philly_cleaned.geojson") # Luming
+
+prop500 <- st_read("data/philly_prop500_dst2hghwy_250325.geojson") %>%
+  mutate(closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")))
 ```
 
 
@@ -180,10 +193,10 @@ landuse_park_ing <- landuse_4326 %>%
 park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
   st_transform('EPSG:4326')
 
-nhoods_4326 <- 
-  # st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>%
-  st_read("data/philadelphia-neighborhoods.geojson") %>%
-  st_transform('EPSG:4326')
+# nhoods_4326 <- 
+#   st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>%
+#   # st_read("data/philadelphia-neighborhoods.geojson") %>%
+#   st_transform('EPSG:4326')
 
 Chinatown_Callowhill <- nhoods_4326 %>%
   filter(NAME %in% c("CHINATOWN", "CALLOWHILL"))
@@ -267,13 +280,6 @@ To achieve the goal of **a data-rich story map**, the methodology is structured 
 
 TODO: include description of qualitative analysis
 
-# Summary of Qualitative Research
-
-## Highway effects on Property Price
-
-
-## Case Studies of Other Highway Caps
-
 
 # Data Wrangling
 
@@ -319,7 +325,7 @@ landuse_rename <- landuse %>%
 
 # philly properties (from Sijia)
 # from the last 5 years, inflation-adjusted prices, total area > 100 sq ft, prices > 30,000, outliers above 5 SD from the mean were removed
-philly_properties <- st_read("data/property_philly_250318.geojson")
+# philly_properties <- st_read("data/property_philly_250318.geojson")
 ```
 
 
@@ -443,7 +449,11 @@ Luming_property <- Luming_property %>%
 
 
 
-# Exploratory Data Analysis
+# Highway Effects Analysis
+
+## Qualitative Research
+
+
 
 ```{r eda_data, quiet = TRUE, results = 'hide'}
 property_EDA <- st_read("Dataset/property_sijia_eda.geojson") %>%
@@ -823,8 +833,9 @@ scatter_4highways <-
 scatter_4highways
 ```
 
+## Study Region Scale Analysis
 
-## Basic Geography
+### Basic Geography
 
 ```{r BasicGeo_data}
 park_valid <- st_make_valid(park)
@@ -922,11 +933,13 @@ BasicGeo_plot3
 ```
 
 
-## Sales Price Change
+### Sales Price Change
 
 (insert picture)
 
-## Discontinuity Effects
+### I-676 Effects
+
+### Discontinuity Effects
 
 ```{r discontinuity_data, quiet = TRUE, results = 'hide'}
 property_discontinutiy <- property_EDA_update %>%
@@ -965,7 +978,7 @@ ggplot(discontinuity_plot, aes(x = distance_to_highway, y = log_sale_price, colo
              fill = "black", color = "white", fontface = "bold", size = 5)
 ```
 
-
+# Predictive Modeling
 
 ## Feature Engineering
 
@@ -975,9 +988,8 @@ ggplot(discontinuity_plot, aes(x = distance_to_highway, y = log_sale_price, colo
 
 ### Summary of Features
 
+## Results
 
-
-# Predictive Modeling
 
 # Scenario Planning
 
