@@ -38,7 +38,7 @@ Chinatown_Stitch <- landuse %>%
 
 ```{r}
 park <- 
-  st_read("https://opendata.arcgis.com/datasets/d52445160ab14380a673e5849203eb64_0.geojson") %>%
+  st_read("data/Parks within 1km.geojson") %>%
   st_transform('EPSG:2272')
 
 metro <- 
@@ -115,27 +115,6 @@ landuse_rename <- landuse %>%
 
 ```{r}
 landuse_colors <- c(
-  "Residential Low" = "#FFFF00",
-  "Residential Medium" = "#FFD700",
-  "Residential High" = "#FFA500",
-  "Commercial Consumer" = "#FF6347",
-  "Commercial Business/Professional" = "#FF4500",
-  "Commercial Mixed Residential" = "#DC143C",
-  "Industrial" = "#A020F0",
-  "Civic/Institution" = "#0000FF",
-  "Transportation" = "gray95",
-  "Culture/Amusement" = "#90EE90",
-  "Active Recreation" = "#00FA9A",     
-  "Park/Open Space" = "#32CD32",        
-  "Cemetery" = "#8B2323",               
-  "Water" = "#0000FF",            
-  "Vacant" = "#D3D3D3", 
-  "Other/Unknown" = "black" 
-)
-```
-
-```{r}
-landuse_colors <- c(
   "Residential Low" = "#FFFFB3",
   "Residential Medium" = "#FFEB8B",
   "Residential High" = "#FFCC80",
@@ -145,7 +124,7 @@ landuse_colors <- c(
   "Industrial" = "#D6A3FF",
   "Civic/Institution" = "#66B3FF",
   "Transportation" = "gray95",
-  "Culture/Amusement" = "#C1FFC1",
+  "Culture/Amusement" = "#FF66CC",
   "Active Recreation" = "#66FFD9",     
   "Park/Open Space" = "#99FF66",        
   "Cemetery" = "#FF9999",               
@@ -155,53 +134,70 @@ landuse_colors <- c(
 )
 ```
 
+```{r,warning=FALSE}
+park_clipped <- st_intersection(park, studyarea)
+```
+
 ```{r}
-ggplot(data = landuse_rename%>% filter(!is.na(landuse))) +
-  geom_sf(aes(fill = landuse), color=NA) +
-  scale_fill_manual(values = landuse_colors,na.value = "white") +
-  labs(title = "Chinatown Land Use", fill = "Category") +
+ggplot(data = landuse_rename %>%
+          filter(!is.na(landuse) & landuse != "Park/Open Space")) +
+  geom_sf(aes(fill = landuse), color = NA) +
+  geom_sf(data = park_clipped, aes(fill = "Park"), color = NA, alpha = 1) +  # Clipped park layer
+  scale_fill_manual(values = c(landuse_colors, "Park" = "#99FF66+"), na.value = "white") +
+  labs(title = "Land Use", 
+       subtitle = "Properties functions in Chinatown",
+       fill = "Category") +
   theme_void() +
   theme(legend.position = "right",
+        plot.title = element_text(size = 18, face = "bold"),
+        plot.subtitle = element_text(size = 12),
         legend.key.size = unit(0.5, "cm"),
         legend.text = element_text(size = 8))
 ```
 
-```{r}
-park_valid <- st_make_valid(park)
+```{r, warning=FALSE}
 transit_valid <- st_make_valid(transit)
 city_hall_valid <- st_make_valid(city_hall)
 school_valid <- st_make_valid(school)
 water_valid <- st_make_valid(water)
 bike_network_valid <- st_make_valid(bike_network)
 
+studyarea_buffer <- st_buffer(studyarea, dist = 1000)
+
 # Clip each dataset to the study area
-park_clipped <- st_intersection(park_valid, studyarea)
-transit_clipped <- st_intersection(transit_valid, studyarea)
-city_hall_clipped <- st_intersection(city_hall_valid, studyarea)
-school_clipped <- st_intersection(school_valid, studyarea)
-water_clipped <- st_intersection(water_valid, studyarea)
-bike_network_clipped <- st_intersection(bike_network_valid, studyarea)
+recreation_clipped <- st_intersection(park, studyarea_buffer)
+transit_clipped <- st_intersection(transit_valid, studyarea_buffer)
+city_hall_clipped <- st_intersection(city_hall_valid, studyarea_buffer)
+school_clipped <- st_intersection(school_valid, studyarea_buffer)
+water_clipped <- st_intersection(water_valid, studyarea_buffer)
+bike_network_clipped <- st_intersection(bike_network_valid, studyarea_buffer)
 ```
 
 ```{r}
+library(ggtext)
+
 ggplot() +
-  geom_sf(data = landuse, fill = "white", color = "gray85", size = 0.05) +
-  
-  geom_sf(data = park_clipped, aes(fill = "Park"), color = NA, alpha = 1) +
-  
-  geom_sf(data = transit_clipped, aes(color = "Transit"), size = 4) +
-  
-  #geom_sf(data = city_hall_clipped, aes(color = "City Hall"), size = 5, shape = 16) +
-
-  geom_sf(data = school_clipped, aes(color = "School"), size = 4) +
-
+  geom_sf(data = landuse, fill = "white", color = "gray90", size = 0.05) +
+  geom_sf(data = recreation_clipped, aes(fill = "Park"), color = NA, alpha = 1) +
+  geom_sf(data = landuse_transportation, aes(fill = "Transportation"), color = NA, alpha = 0.5) +
+  geom_sf(data = transit_clipped, aes(color = "Transit"), size = 2) +
+  geom_sf(data = school_clipped, aes(color = "School"), size = 2) +
   geom_sf(data = bike_network_clipped, aes(color = "Bike Network"), size = 1) +
   
-  scale_color_manual(values = c("Transit" = "#66B3FF", "School" = "#FF9980", "Bike Network" = "#D6A3FF"), name = NULL) +
-  scale_fill_manual(values = c("Park" = "#99FF66"), name = NULL) +
-  labs(title = "Chinatown Infrastructures") +
+  scale_color_manual(values = c("Transit" = "blue", "School" = "orange", "Bike Network" = "purple"), name = NULL) +
+  scale_fill_manual(values = c("Park" = "green","Transportation" = "gray70"), name = NULL) +
+  
+  labs(
+    title = "Amenities", 
+    subtitle = "<span style='color:orange;'>Schools</span>, <span style='color:blue;'>Transit Stations</span>, <span style='color:green;'>Parks</span>, and <span style='color:purple;'>Bike Lanes</span> in Chinatown"
+  ) +
   theme_void() +
-  theme(legend.position = "right",
-        legend.key.size = unit(0.5, "cm"),
-        legend.text = element_text(size = 8))
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 18, face = "bold"),
+    plot.subtitle = element_markdown(size = 12, hjust = 0),
+    legend.key.size = unit(0.5, "cm"),
+    legend.text = element_text(size = 8)
+  )
+
 ```
