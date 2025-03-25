@@ -49,7 +49,7 @@ library(knitr) # insert images
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 ```
 
-```{r setup_wd, message = FALSE}
+```{r setup_wd, message = FALSE, quiet = TRUE, results = 'hide'}
 # Change to your own workspace
 knitr::opts_knit$set(root.dir = "E:/Spring/Practicum/DataAnalysis/Chinatown")
 wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
@@ -68,8 +68,6 @@ nhoods_4326 <-
 # philly_properties <- st_read("data/property_philly_250318.geojson") # Aki
 philly_properties <- st_read("DataWrangling/data/property_philly_cleaned.geojson") # Luming
 
-prop500 <- st_read("data/philly_prop500_dst2hghwy_250325.geojson") %>%
-  mutate(closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")))
 ```
 
 
@@ -79,7 +77,7 @@ prop500 <- st_read("data/philly_prop500_dst2hghwy_250325.geojson") %>%
 
 It is hard to talk about the history of the **Philadelphia Chinatown** without the construction of **I-676**, also known as the **Vine Street Expressway**. Although the highway serves as a significant thoroughfare through Center City Philadelphia, the indispensable repercussion on the adjacent neighborhoods still lingers today. Consequences of the highway such as demolishment of buildings, pedestrian safety threats, traffic congestion, as well as noise and air pollutions had been harming Chinatown and its surrounding neighborhoods over the past decades and are yet to be addressed. 
 
-Standing in opposition to the issues, [**City of Philadelphia Office of Transportation and Infrastructure and Sustainability (OTIS)**](https://www.phila.gov/departments/office-of-transportation-and-infrastructure-systems/) brought forth the plan of capping sections of the expressway as a solution to address its historical harms on the Chinatown region. This “cap”, named **the Chinatown Stitch project**, aimed to create a safe and equitable green space for the public that would reconnect areas north and south to the Vine Street expressway. Receiving funds from the US department of Transportation and the local organizations, the construction of the Chinatown Stitch will start in 2027 and is expected to be completed in early 2030.
+Standing in opposition to the issues, [City of Philadelphia Office of Transportation and Infrastructure and Sustainability (OTIS)](https://www.phila.gov/departments/office-of-transportation-and-infrastructure-systems/) brought forth the plan of capping sections of the expressway as a solution to address its historical harms on the Chinatown region. This “cap”, named **the Chinatown Stitch project**, aimed to create a safe and equitable green space for the public that would reconnect areas north and south to the Vine Street expressway. Receiving funds from the US department of Transportation and the local organizations, the construction of the Chinatown Stitch will start in 2027 and is expected to be completed in early 2030.
 
 This purpose of this study is to help OTIS **understand the housing market of Philadelphia Chinatown region before and after the implementation of the Chinatown Stitch**. The first part of the study will focus the effects of highways on sales prices in the study region as well as the entire Philadelphia. House prices will then be estimated using **three predictive models under three different future scenarios**: business as usual without the implementation of the Chinatown Stitch, business as usual with the implementation of the Chinatown Stitch, and an alternative future in which the Chinatown Stitch significantly reshapes the urban landscape of the study region.
 
@@ -190,7 +188,7 @@ landuse_4326_plot <- landuse_4326 %>%
 landuse_park_ing <- landuse_4326 %>%
   filter(OBJECTID_1 == 514214)
 
-park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
+park_4326 <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
   st_transform('EPSG:4326')
 
 # nhoods_4326 <- 
@@ -224,7 +222,7 @@ UseCase <- leaflet() %>%
               dashArray = "5,5",
               fillColor = "#eb5600",
               fillOpacity = 0.1) %>%
-  addPolygons(data = park,
+  addPolygons(data = park_4326,
               color = "#1a9988",
               weight = 1,
               fillOpacity = 0.6,
@@ -345,8 +343,8 @@ nhoods <-
   st_read("Dataset/DataWrangle/philadelphia-neighborhoods.geojson") %>%
   st_transform('EPSG:2272')
 
-# park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
-#   st_transform('EPSG:4326')
+park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
+  st_transform('EPSG:2272')
 
 metro <- 
   st_read("https://opendata.arcgis.com/api/v3/datasets/af52d74b872045d0abb4a6bbbb249453_0/downloads/data?format=geojson&spatialRefId=4326") %>%
@@ -479,7 +477,7 @@ property_EDA_update <-
 
 Before jumping into modeling, we first explored the relationship between distance to highway and property prices. We used property data from OPA Philadelphia that was cleaned to include only the data from the last five years (Jan. 1st, 2020 to Dec. 31st, 2024) with prices adjusted for inflation after removing extreme outliers and improbable values, and keeping properties with total area of over 100 square feet. Looking at properties (of all kinds) within 500 m of Phildelphia's main highways -- I-95 on the East, I-76 on the West, US-1 in the North, and I-676 through the city -- we saw the following trends in property prices.
 
-```{r prep_500m_highway_data}
+```{r prep_500m_highway_data, quiet = TRUE, results = 'hide'}
 buff500 <- 500 * 3.28084
 hiway_500buff <- st_union(st_buffer(philly_highways, buff500))
 
@@ -536,7 +534,7 @@ hiway_500buff <- st_union(st_buffer(philly_highways, buff500))
 # st_write(prop500, "data/philly_prop500_dst2hghwy_250325.geojson")
 
 # read in pre-saved file
-prop500 <- st_read("data/philly_prop500_dst2hghwy_250325.geojson") %>%
+prop500 <- st_read("Dataset/PhillyPropertiesNearHighways/philly_prop500_dst2hghwy_250325.geojson") %>%
   mutate(closest_highway = factor(closest_highway, levels = c("US-1", "I-76", "I-676", "I-95")))
 
 ```
@@ -838,6 +836,7 @@ scatter_4highways
 ### Basic Geography
 
 ```{r BasicGeo_data}
+park_clipped <- st_intersection(park, studyarea)
 park_valid <- st_make_valid(park)
 transit_valid <- st_make_valid(transit)
 city_hall_valid <- st_make_valid(city_hall)
@@ -845,13 +844,16 @@ school_valid <- st_make_valid(school)
 water_valid <- st_make_valid(water)
 bike_network_valid <- st_make_valid(bike_network)
 
+studyarea_buffer <- st_buffer(studyarea, dist = 1000)
+
 # Clip each dataset to the study area
-park_clipped <- st_intersection(park_valid, studyarea)
-transit_clipped <- st_intersection(transit_valid, studyarea)
-city_hall_clipped <- st_intersection(city_hall_valid, studyarea)
-school_clipped <- st_intersection(school_valid, studyarea)
-water_clipped <- st_intersection(water_valid, studyarea)
-bike_network_clipped <- st_intersection(bike_network_valid, studyarea)
+recreation_clipped <- st_intersection(park, studyarea_buffer)
+transit_clipped <- st_intersection(transit_valid, studyarea_buffer)
+city_hall_clipped <- st_intersection(city_hall_valid, studyarea_buffer)
+school_clipped <- st_intersection(school_valid, studyarea_buffer)
+water_clipped <- st_intersection(water_valid, studyarea_buffer)
+bike_network_clipped <- st_intersection(bike_network_valid, studyarea_buffer)
+landuse_transportation <- landuse_rename[landuse_rename$landuse == "Transportation", ]
 
 property_vacant <- property_EDA %>%
   filter(category_code_description %in% c("VACANT LAND","SINGLE FAMILY", "VACANT LAND - NON-RESIDENTIAL")) %>%
@@ -881,35 +883,44 @@ landuse_colors <- c(
   "Other/Unknown" = "gray25"
 )
 
-BasicGeo_plot1 <- ggplot(data = landuse_rename%>% filter(!is.na(landuse))) +
-  geom_sf(aes(fill = landuse), color=NA) +
-  scale_fill_manual(values = landuse_colors,na.value = "white") +
-  labs(title = "Chinatown Land Use", fill = "Category") +
+BasicGeo_plot1 <- ggplot(data = landuse_rename %>%
+          filter(!is.na(landuse) & landuse != "Park/Open Space")) +
+  geom_sf(aes(fill = landuse), color = NA) +
+  geom_sf(data = park_clipped, aes(fill = "Park"), color = NA, alpha = 1) +  # Clipped park layer
+  scale_fill_manual(values = c(landuse_colors, "Park" = "#99FF66"), na.value = "white") +
+  labs(title = "Land Use", 
+       subtitle = "Properties functions in Chinatown",
+       fill = "Category") +
   theme_void() +
   theme(legend.position = "right",
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 10),
         legend.key.size = unit(0.5, "cm"),
         legend.text = element_text(size = 8))
 
 BasicGeo_plot2 <- ggplot() +
-  geom_sf(data = landuse, fill = "white", color = "gray85", size = 0.05) +
-  
-  geom_sf(data = park_clipped, aes(fill = "Park"), color = NA, alpha = 1) +
-  
-  geom_sf(data = transit_clipped, aes(color = "Transit"), size = 4) +
-  
-  #geom_sf(data = city_hall_clipped, aes(color = "City Hall"), size = 5, shape = 16) +
-
-  geom_sf(data = school_clipped, aes(color = "School"), size = 4) +
-
+  geom_sf(data = landuse, fill = "white", color = "gray90", size = 0.05) +
+  geom_sf(data = recreation_clipped, aes(fill = "Park"), color = NA, alpha = 1) +
+  geom_sf(data = landuse_transportation, aes(fill = "Transportation"), color = NA, alpha = 0.5) +
+  geom_sf(data = transit_clipped, aes(color = "Transit"), size = 2) +
+  geom_sf(data = school_clipped, aes(color = "School"), size = 2) +
   geom_sf(data = bike_network_clipped, aes(color = "Bike Network"), size = 1) +
   
-  scale_color_manual(values = c("Transit" = "#66B3FF", "School" = "#FF9980", "Bike Network" = "#D6A3FF"), name = NULL) +
-  scale_fill_manual(values = c("Park" = "#99FF66"), name = NULL) +
-  labs(title = "Chinatown Infrastructures") +
+  scale_color_manual(values = c("Transit" = "blue", "School" = "orange", "Bike Network" = "purple"), name = NULL) +
+  scale_fill_manual(values = c("Park" = "green","Transportation" = "gray70"), name = NULL) +
+  
+  labs(
+    title = "Amenities", 
+    subtitle = "<span style='color:orange;'>Schools</span>, <span style='color:blue;'>Transit Stations</span>, <span style='color:green;'>Parks</span>, and <span style='color:purple;'>Bike Lanes</span>"
+  ) +
   theme_void() +
-  theme(legend.position = "right",
-        legend.key.size = unit(0.5, "cm"),
-        legend.text = element_text(size = 8))
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_markdown(size = 10, hjust = 0),
+    legend.key.size = unit(0.5, "cm"),
+    legend.text = element_text(size = 8)
+  )
 
 BasicGeo_plot3 <- ggplot() +
   geom_sf(data = landuse, fill = "white", color = "gray85", size = 0.05) +
@@ -924,18 +935,31 @@ BasicGeo_plot3 <- ggplot() +
        ) +
   theme_void() +
   theme(legend.position = "none",
-        plot.title = element_text(size = 18, face = "bold"),
-        plot.subtitle = ggtext::element_markdown(size = 12))
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = ggtext::element_markdown(size = 10))
 
 BasicGeo_plot1
-BasicGeo_plot2
-BasicGeo_plot3
+BasicGeo_plot2 | BasicGeo_plot3
 ```
 
 
 ### Sales Price Change
 
-(insert picture)
+```{r StudyPrice_change, echo=FALSE}
+# Create a table with images and captions
+kable(
+  data.frame(
+    saleprice_change1 = "![](Final R Markdown/Images/saleprice_change1.png){height=250px}",
+    saleprice_change2 = "![](Final R Markdown/Images/saleprice_change2.png){height=250px}"
+  ),
+  format = "html",
+  align = "c",
+  col.names = NULL
+) %>%
+  kable_styling(position = "center")
+
+```
+
 
 ### I-676 Effects
 
