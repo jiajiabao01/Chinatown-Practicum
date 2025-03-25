@@ -66,7 +66,7 @@ wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
 
 It is hard to talk about the history of the **Philadelphia Chinatown** without the construction of **I-676**, also known as the **Vine Street Expressway**. Although the highway serves as a significant thoroughfare through Center City Philadelphia, the indispensable repercussion on the adjacent neighborhoods still lingers today. Consequences of the highway such as demolishment of buildings, pedestrian safety threats, traffic congestion, as well as noise and air pollutions had been harming Chinatown and its surrounding neighborhoods over the past decades and are yet to be addressed. 
 
-Standing in opposition to the issues, **City of Philadelphia Office of Transportation and Infrastructure and Sustainability (OTIS)** brought forth the plan of capping sections of the expressway as a solution to address its historical harms on the Chinatown region. This “cap”, named **the Chinatown Stitch project**, aimed to create a safe and equitable green space for the public that would reconnect areas north and south to the Vine Street expressway. Receiving funds from the US department of Transportation and the local organizations, the construction of the Chinatown Stitch will start in 2027 and is expected to be completed in early 2030.
+Standing in opposition to the issues, [**City of Philadelphia Office of Transportation and Infrastructure and Sustainability (OTIS)**](https://www.phila.gov/departments/office-of-transportation-and-infrastructure-systems/) brought forth the plan of capping sections of the expressway as a solution to address its historical harms on the Chinatown region. This “cap”, named **the Chinatown Stitch project**, aimed to create a safe and equitable green space for the public that would reconnect areas north and south to the Vine Street expressway. Receiving funds from the US department of Transportation and the local organizations, the construction of the Chinatown Stitch will start in 2027 and is expected to be completed in early 2030.
 
 This purpose of this study is to help OTIS **understand the housing market of Philadelphia Chinatown region before and after the implementation of the Chinatown Stitch**. The first part of the study will focus the effects of highways on sales prices in the study region as well as the entire Philadelphia. House prices will then be estimated using **three predictive models under three different future scenarios**: business as usual without the implementation of the Chinatown Stitch, business as usual with the implementation of the Chinatown Stitch, and an alternative future in which the Chinatown Stitch significantly reshapes the urban landscape of the study region.
 
@@ -339,9 +339,8 @@ nhoods <-
   st_read("Dataset/DataWrangle/philadelphia-neighborhoods.geojson") %>%
   st_transform('EPSG:2272')
 
-park <- 
-  st_read("https://opendata.arcgis.com/datasets/d52445160ab14380a673e5849203eb64_0.geojson") %>%
-  st_transform('EPSG:2272')
+# park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
+#   st_transform('EPSG:4326')
 
 metro <- 
   st_read("https://opendata.arcgis.com/api/v3/datasets/af52d74b872045d0abb4a6bbbb249453_0/downloads/data?format=geojson&spatialRefId=4326") %>%
@@ -677,6 +676,7 @@ scatter_4highways <-
 scatter_4highways
 
 ```
+
 From this scatter plot, we see that properties within 500m of I-676 and I-76 follow the expected pattern of increasing property prices as one gets further from the highway (folks want to avoid the noise and air pollution from the highway). The correlation between distance to closest highway (in meters) and Property sale price (log-transformed price per total area) is 0.147 for properties near I-676, meaning for every additional meter away from
 
 ```{r prop500_scatter_test1}
