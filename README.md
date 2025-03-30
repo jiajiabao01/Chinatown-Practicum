@@ -1,7 +1,7 @@
 # Envisioning Neighborhood Futures After the Chinatown Stitch
 
 * **Team Members:**
-  * Luming Xu, lumx@upenn.edu
+  * Luming Xu, lumx@design.upenn.edu
   * Sijia Zhang, sjzhang@design.upenn.edu
   * Aki Di Sandro, akidi@design.upenn.edu
   * Ray Ma, marun@design.upenn.edu
@@ -32,8 +32,8 @@ This repository documents the data analysis part of the project. Our outcomes wi
 |  6   |  Feb 25  |  1st Presentation  |
 |  7   |  Mar 4   |  _Exploratory Analysis_: case studies of amenities, feature engineering, and r markdown  |
 |  -   |  Mar 11   |  **-(SPRING BREAK)-**  |
-|  8   |  Mar 18  |  _Modeling_:   |
-|  9   |  Mar 25  |  _Modeling_:   |
+|  8   |  Mar 18  |  _Modeling_:  update property data, feature engineering, case studies of caps |
+|  9   |  Mar 25  |  _Modeling_: feature engineering, OLS model, r markdown consolidation |
 |  10  |  Apr 1  |  2nd Presentation  |
 |  11  |  Apr 8   |    |
 |  12  |  Apr 15  |    |
