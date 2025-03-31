@@ -346,6 +346,11 @@ nhoods <-
 park <- st_read("Dataset/ParksModified/Parks_within_1km.shp") %>%
   st_transform('EPSG:2272')
 
+# philly park data (https://opendataphilly.org/datasets/ppr-properties/)
+philly_parks <- st_read("https://opendata.arcgis.com/datasets/d52445160ab14380a673e5849203eb64_0.geojson") %>%
+  st_transform(crs = 'EPSG:2272') %>% 
+  st_intersection(philly_bounds)
+
 metro <- 
   st_read("https://opendata.arcgis.com/api/v3/datasets/af52d74b872045d0abb4a6bbbb249453_0/downloads/data?format=geojson&spatialRefId=4326") %>%
   st_transform('EPSG:2272') %>%
@@ -545,7 +550,7 @@ prop500 <- st_read("Dataset/PhillyPropertiesNearHighways/philly_prop500_dst2hghw
 ggplot() +
   geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
   geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
-  geom_sf(data = park, fill = "#6b9169", color = "transparent") +
+  geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
   geom_sf(data = hiway_500buff,
           color = "transparent", fill = "grey", alpha = 0.4) +
   geom_sf(data = prop500,
@@ -836,6 +841,223 @@ kable(
 
 
 ### I-676 Effects
+
+One of the key deliverables that OTIS wants from us includes an analysis on the effect of I-676 on property prices nearby. Here, we construct a relatively simple linear model with a few key independent variables to look at the effect of I-676 on property prices while accounting for some control variables such as the square footage of the property, number of bathrooms, year built, zoning, and zip code among others.
+
+```{r i676effects_setup}
+# keep properties within 500m of I-676
+i676_buff <- st_union(st_buffer(philly_highways %>% 
+                                  filter(ST_RT_NO == "0676"),
+                                buff500))
+
+# add features for simple linear regression
+propi676_500 <- prop500[i676_buff,] %>% 
+  # some feature engineering
+  mutate(residential = ifelse(category_code_description %in% c("APARTMENTS  > 4 UNITS",
+                                                               "MIXED USE",
+                                                               "MULTI FAMILY",
+                                                               "SINGLE FAMILY"),
+                              1, 0), # is this property residential? (including mixed)
+         )
+
+# map to visualize
+# ggplot() +
+#   geom_sf(data = philly_bounds, fill = "#c9b887", color = "grey") +
+#   geom_sf(data = hydro, fill = "#7d97c7", color = "transparent") +
+#   geom_sf(data = philly_parks, fill = "#6b9169", color = "transparent") +
+#   geom_sf(data = i676_buff,
+#           color = "transparent", fill = "grey", alpha = 0.4) +
+#   geom_sf(data = propi676_500, size = 0.3, color = "#7fe3d6",
+#           show.legend = F) +
+#   geom_sf(data = philly_highways %>% 
+#             filter(ST_RT_NO == "0676"),
+#           color = "black") +
+#   labs(title = "Properties within 500m of I-676") +
+#   theme_void()
+
+
+```
+
+```{r i676effects_exploring features}
+# Numeric variables
+
+# depth
+# fireplaces
+# frontage
+# garage_spaces
+# number_of_bathrooms
+# number_of_bedrooms
+# number_of_rooms
+# number_stories
+# total_area
+# year_built
+
+
+# Categorical variables
+
+## Basements
+# not including because there isn't enough of a difference in log price across categories
+unique(propi676_500$basements)
+table(propi676_500$basements)
+summary(propi676_500$basements)
+
+temp <- propi676_500 %>% 
+  mutate(basement_finish = case_when(basements %in% c("A", "B", "E", "F") ~ "Finished", # including finished and semi-finished
+                                     basements %in% c("C", "G", "J") ~ "Unfinished",
+                                     basements == "0" ~ "No Basement",
+                                     .default = "Unknown Finish"),
+         basement_size = case_when(basements %in% c("A", "B", "C", "D") ~ "Full", # including finished and semi-finished
+                                   basements %in% c("E", "F", "G", "H") ~ "Partial",
+                                   basements == "0" ~ "No Basement",
+                                   .default = "Unknown Size"))
+
+ggplot(data = temp %>% 
+         group_by(basement_finish) %>% 
+         summarize(mean_price = mean(adjusted_sale_price),
+                   mean_logprice = mean(log_price)) %>% 
+         ungroup() %>% 
+         pivot_longer(cols = 2:3, names_to = "price_type", values_to = "mean_price"),
+       aes(x = basement_finish, y = mean_price)) +
+  geom_bar(stat = "identity", fill = "#1a9988", alpha = 0.8, width = 0.3) +
+  facet_wrap(~price_type, scales = "free") +
+  theme_minimal() +
+  labs(title = "Mean Property Price (raw and log-transformed) for Different Basement Finishes",
+       x = "Basement Finishes",
+       y = "Mean Price")
+
+ggplot(data = temp %>% 
+         group_by(basement_size) %>% 
+         summarize(mean_price = mean(adjusted_sale_price),
+                   mean_logprice = mean(log_price)) %>% 
+         ungroup() %>% 
+         pivot_longer(cols = 2:3, names_to = "price_type", values_to = "mean_price"),
+       aes(x = basement_size, y = mean_price)) +
+  geom_bar(stat = "identity", fill = "#1a9988", alpha = 0.8, width = 0.3) +
+  facet_wrap(~price_type, scales = "free") +
+  theme_minimal() +
+  labs(title = "Mean Property Price (raw and log-transformed) for Different Basement Size",
+       x = "Basement Size",
+       y = "Mean Price")
+
+## Category Code
+# only including whether a property is residential or not
+unique(propi676_500$category_code)
+table(propi676_500$category_code)
+summary(propi676_500$category_code)
+
+temp <- propi676_500 %>% 
+  mutate(category_simple = case_when(category_code_description %in% c("APARTMENTS  > 4 UNITS",
+                                                                      "MIXED USE",
+                                                                      "MULTI FAMILY",
+                                                                      "SINGLE FAMILY") ~ "Residential or Mixed",
+                                     grepl("INDUS", category_code_description) ~ "Industrial",
+                                     grepl("HOTEL", category_code_description) ~ "Hotel",
+                                     grepl("OFFICES", category_code_description) ~ "Offices",
+                                     category_code_description %in% c("COMMERCIAL",
+                                                                      "GARAGE - COMMERCIAL",
+                                                                      "RETAIL") ~ "Commercial",
+                                     grepl("VACANT", category_code_description) ~ "Vacant",
+                                     .default = "Other"),
+         residential = ifelse(category_simple == "Residential or Mixed", 1, 0))
+
+# ggplot(data = temp %>% 
+#          group_by(category_simple) %>% 
+#          summarize(mean_price = mean(adjusted_sale_price),
+#                    mean_logprice = mean(log_price)) %>% 
+#          ungroup() %>% 
+#          pivot_longer(cols = 2:3, names_to = "price_type", values_to = "mean_price"),
+#        aes(x = category_simple, y = mean_price)) +
+#   geom_bar(stat = "identity", fill = "#1a9988", alpha = 0.8, width = 0.3) +
+#   facet_wrap(~price_type, scales = "free") +
+#   theme_minimal() +
+#   labs(title = "Mean Property Price (raw and log-transformed) by Category",
+#        x = "Property Category",
+#        y = "Mean Price")
+
+ggplot(data = temp %>% 
+         group_by(residential) %>% 
+         summarize(mean_price = mean(adjusted_sale_price),
+                   mean_logprice = mean(log_price)) %>% 
+         ungroup() %>% 
+         pivot_longer(cols = 2:3, names_to = "price_type", values_to = "mean_price"),
+       aes(x = residential, y = mean_price)) +
+  geom_bar(stat = "identity", fill = "#1a9988", alpha = 0.8, width = 0.3) +
+  facet_wrap(~price_type, scales = "free") +
+  theme_minimal() +
+  labs(title = "Mean Property Price (raw and log-transformed) by Category (Residential or not)",
+       x = "Property Category",
+       y = "Mean Price")
+
+## Central Air
+# not including because there isn't enough of a difference in log price across categories
+unique(propi676_500$central_air)
+table(propi676_500$central_air)
+summary(propi676_500$central_air)
+
+temp <- propi676_500 %>% 
+  mutate(central_air_new = case_when(central_air == "Y" ~ central_air, 
+                                     .default = "N or unknown"))
+
+ggplot(data = temp %>%
+         group_by(central_air_new) %>%
+         summarize(mean_price = mean(adjusted_sale_price),
+                   mean_logprice = mean(log_price)) %>%
+         ungroup() %>%
+         pivot_longer(cols = 2:3, names_to = "price_type", values_to = "mean_price"),
+       aes(x = central_air_new, y = mean_price)) +
+  geom_bar(stat = "identity", fill = "#1a9988", alpha = 0.8, width = 0.3) +
+  facet_wrap(~price_type, scales = "free") +
+  theme_minimal() +
+  labs(title = "Mean Property Price (raw and log-transformed) by Central Air",
+       x = "Central Air",
+       y = "Mean Price")
+
+# depth (num)
+
+# exterior_condition
+# fireplaces (num)
+# frontage (num)
+# garage_spaces (num)
+# interior_condition
+# number_of_bathrooms (num)
+# number_of_bedrooms (num)
+# number_of_rooms (num)
+# number_stories (num)
+# quality_grade
+# parcel_shape
+# separate_utilities
+# total_area (num)
+# year_built (num)
+
+
+```
+
+
+```{r i676effects_model}
+i676_price_reg <- lm(adjusted_sale_price ~ dist_to_closest_highwaym + 
+                       residential +  # internal characteristics
+                       factor(zip_code), # neighborhood effects (via zip code for now)
+                     data = propi676_500)
+
+summary(i676_price_reg)
+
+i676_logprice_reg <- lm(log_price ~ dist_to_closest_highwaym + 
+                          residential + # internal characteristics
+                          factor(zip_code), # neighborhood effects (via zip code for now)
+                        data = propi676_500)
+
+summary(i676_logprice_reg)
+
+# model with interaction between dist to closest highway and ZIP
+mult_reg_int <- lm(log_price ~ dist_to_closest_highwaym * factor(zip_code) + 
+                     total_area + year_built + # internal characteristics
+                     dist_parkm + dist_libm + dist_cityhallm + dist_hospitalm + dist_historicm, # external / amenities
+                   data = cleaned_props)
+
+summary(mult_reg_int)
+```
+
+
 
 ### Discontinuity Effects
 
