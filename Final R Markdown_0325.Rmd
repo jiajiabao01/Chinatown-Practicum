@@ -453,6 +453,7 @@ Luming_property <- Luming_property %>%
 
 
 
+
 ```{r eda_data, quiet = TRUE, results = 'hide'}
 property_EDA <- st_read("Dataset/property_sijia_eda.geojson") %>%
   st_transform('EPSG:2272')
