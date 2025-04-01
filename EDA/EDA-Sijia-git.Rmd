@@ -81,85 +81,115 @@ studyarea_south <- st_read("~/Documents/Upenn/Practicum/2025/Data/studyarea/stud
 ## Data Processing
 ### property data
 ```{r property philly cleanup for sale price, quiet = TRUE, results = 'hide'}
-### for property data - city wise:  adjust sale price 
-property_data <- property%>%
-  mutate(sale_date = as.Date(sale_date, format = "%Y-%m-%d")) %>%
-  filter(!is.na(sale_price))
-
-mean_price <- mean(property_data$sale_price, na.rm = TRUE)
-sd_price <- sd(property_data$sale_price, na.rm = TRUE)
-extreme_outlier <- mean_price + 5 * sd_price
-
-property_data <- property_data %>%
-  filter(sale_price > 30000, sale_price < extreme_outlier)
-
-colnames(cpi_data) <- c("half1", "half2", "cpi_date")
-cpi_long <- cpi_data %>%
+property_CT <- property_final %>%
   mutate(
-    Jan = `half1`, Feb = `half1`, Mar = `half1`, Apr = `half1`, May = `half1`, Jun = `half1`,
-    Jul = `half2`, Aug = `half2`, Sep = `half2`, Oct = `half2`, Nov = `half2`, Dec = `half2`
-  ) %>%
-  select(-half1, -half2) %>%
-  pivot_longer(cols = -cpi_date, names_to = "Month", values_to = "CPI") %>%
-  mutate(
-    Month = match(Month, month.abb),
-    date = as.Date(paste(cpi_date, Month, "01", sep = "-"))  
-  ) %>%
-  select(date, CPI)
+    year_built = as.numeric(year_built),
+    year_built_group = case_when(
+    year_built < 1990 ~ "Before 1990",
+    year_built >= 1990 & year_built < 2000 ~ "1940-1979",
+    year_built >= 2000 & year_built < 2020 ~ "1980s-1990s",
+#    year_built >= 2010 & year_built < 2020 ~ "2000s-2010s",
+    year_built >= 2020 ~ "2010s+"),
+    log_price = log(adj_sale_price),
+    log_dist_highway = log(distance_to_I676 +1),
+    
+    central_air = case_when(
+      central_air %in% c("1", "0","N","Y") ~ "Y",  
+      TRUE ~ "N"                          
+    ),
+    central_air = factor(central_air),
+    
+    exterior_condition_recode = case_when(
+      is.na(exterior_condition) | exterior_condition == 2 ~ "Good",
+      exterior_condition %in% c(1, 6, 7) ~ "Average",
+      exterior_condition %in% c(3, 4, 5) ~ "Poor",
+      TRUE ~ "Unknown"
+    ),
 
-property_data <- property_data %>%
-  filter(sale_date <= as.Date("2024-12-31"))%>%
-  mutate(
-    sale_date = as.Date(sale_date, format = "%Y-%m-%d"), 
-    sale_month = floor_date(sale_date, "month"))%>%
-  left_join(cpi_long, by = c("sale_month" = "date"))%>%
-  mutate(CPI = as.numeric(CPI))%>%
-  mutate(adj_sale_price = sale_price * (340.331/CPI)) %>%
-  select(-sale_month)%>%
-  select(-recording_date,  -other_building, 
-         -assessment_date, -mailing_address_2, -market_value_date)%>%
-  relocate(sale_price, adj_sale_price, .after = 2)
+    exterior_condition = factor(exterior_condition),
+  
+    interior_condition_recode = case_when(
+      interior_condition %in% c(2, NA) ~ "Good",
+      interior_condition %in% c(1,4,6)~ "Average",
+      interior_condition %in% c(3,5,7) ~ "Poor",
+      TRUE ~ "Unknown"
+    ),
+    interior_condition = factor(interior_condition),
+    
+    garage_spaces = case_when(
+      is.na(garage_spaces) | garage_spaces == 0 ~ "0",    
+      garage_spaces == 1 ~ "1",      
+      TRUE ~ "2"                     
+    ),
+    garage_spaces = factor(garage_spaces),
+    
+    general_construction = case_when(       
+      general_construction %in% c("A ", "B ", "D ") ~ "A",  
+      general_construction == "3 " ~ "C",        
+      TRUE ~ "B"                                 
+    ),
+    general_construction = factor(general_construction),
+    
+    number_of_bathrooms = case_when(
+      number_of_bathrooms == 0 ~ "0",                   
+      number_of_bathrooms == 1 ~ "1",                   
+      number_of_bathrooms %in% c(2, NA) ~ "2",          
+      number_of_bathrooms == 3 ~ "3",                   
+      TRUE ~ "4"                                        
+    ),
+    number_of_bathrooms = factor(number_of_bathrooms),
+    
+    number_of_bedrooms = case_when(
+      number_of_bedrooms %in% c(0, 12) | is.na(number_of_bedrooms) ~ "0",  
+      number_of_bedrooms %in% c(1, 2) ~ "1",    
+      number_of_bedrooms == 3 ~ "2",            
+      number_of_bedrooms == 4 ~ "3",            
+      number_of_bedrooms %in% c(5, 6) ~ "4",    
+      number_of_bedrooms %in% c(7, 8, 9) ~ "5" 
+    ),
+    number_of_bedrooms = factor(number_of_bedrooms),
+    
+    
+    quality_grade_recode = case_when(
+      quality_grade %in% c("A+", "A") ~ "1", 
+      quality_grade %in% c("A-","3", "7") ~ "2", 
+      TRUE ~ "3"
+    ),
+    quality_grade = factor(quality_grade),
+    
+    separate_utilities = case_when(
+      separate_utilities %in% c("A", "C") ~ "B",  
+      TRUE ~ "A"                                 
+    ),
+    separate_utilities = factor(separate_utilities),
+    
+    
+    building_code_description_new = case_when(
+      building_code_description_new %in% c("COLONIAL", "OLD STYLE", "ROW MODERN", "ROW OLD STYLE", "TUDOR", "TWIN BUNGALOW") ~ "1",
+      building_code_description_new %in% c("ROW POST WAR", "ROW TYPICAL", "TWIN CONVENTIONAL") ~ "3",
+      building_code_description_new %in% c("OTHER", "ROW PORCH FRONT") ~ "4",
+      TRUE ~ "2"
+    ),
+    building_code_description_new = factor(building_code_description_new),
 
-property_data <- st_transform(property_data, crs = 2272)
+    zoning_group = case_when(
+    zoning %in% c("CMX5") ~ "CMX5",
+    zoning %in% c("IRMX") ~ "IRMX",
+    zoning %in% c("RM1","RM2", "RM4") ~ "RM",
+    zoning %in% c("RMX3") ~ "RMX3",
+    zoning %in% c("RSA5") ~ "RSA5",
+    zoning %in% c("ICMX") ~ "ICMX",
+    zoning %in% c("SPPOA") ~ "SPPOA",
+    zoning %in% c("I2") ~ "I2",
+    zoning %in% c("CMX2.5", "CMX2", "CMX1") ~ "CMX(1,2,2.5)",
+    zoning %in% c("CMX3", "CMX4") ~ "CMX(3,4)",
+    TRUE ~ "Other"),
+  zoning_group = factor(zoning_group)
 
-#st_write(property_data, "property_philly.geojson", driver = "GeoJSON", delete_dsn = TRUE)
-#test <- st_read("~/Documents/Upenn/Practicum/2025/Chinatown-Practicum/DataWrangling/property_philly.geojson")
+  )
 
-
-
-### For property data - Chinatown wise:  trim study area - trim zoning attribute - 
-
-#studyarea1 <- st_transform(studyarea1, st_crs(property))
-property1 <- st_intersection(property_data, studyarea1)
-nhood1 <- st_intersection(nhood, studyarea1)
-#property_studyareatest<- st_filter(property, studyarea1)
-#st_write(property1, "property1.geojson")
-#plot(st_geometry(property1))
-#plot(st_geometry(block2023_studyarea))
-#plot(studyarea_tract)
-#plot(I676)
-
-property1 <- property1 %>%
-  select(1:2, zoning, location, everything())
-
-#na_rows <- property1 %>%
-#  st_drop_geometry() %>% 
-#  filter(is.na(.data$zoning)) 
-
-property1 <- property1 %>%
-  mutate(zoning = case_when(
-    location == "1310-16 VINE ST" ~ "CMX4",   
-    location == "252-56 N 13TH ST" ~ "CMX4",
-    location == "255-57 N BROAD ST" ~ "CMX4",
-    location == "451 N 12TH ST" ~ "CMX3",
-    location == "453 N 12TH ST" ~"CMX3",
-    location == "447 N 12TH ST" ~ "CMX3",
-    location == "1108 BUTTONWOOD ST" ~ "CMX3",
-    location == "1104 BUTTONWOOD ST" ~ "CMX3",
-    location == "256-60 N MARVINE ST" ~ "CMX4",
-    location == "820 VINE ST" ~ "CMX4",
-    TRUE ~ zoning                        
-  ))
+mean_depth <- mean(property_CT$depth, na.rm = TRUE)
+property_CT$depth[is.na(property_CT$depth)] <- mean_depth
 ```
 
 ### Census Data
@@ -1310,7 +1340,7 @@ property_CT$depth[is.na(property_CT$depth)] <- mean_depth
 ## OLS Regression Modeling
 ```{r OLS}
 lm_CT <- lm(
-  log(adj_sale_price) ~ log_dist_highway  + log(distance_to_city_hall +1) + log (distance_to_nearest_transit +1) + log (nearest_restaurant_dist_m +1)  + log(distance_to_nearest_park +1) + zoning + zip_code + exterior_condition + interior_condition + log(total_livable_area+1) + number_of_bathrooms  + number_of_bedrooms + quality_grade + log(distance_to_nearest_water+1) + central_air  + general_construction + separate_utilities  + building_code_description_new + crime_nn5 + MedHHInc + year_built_group +  LPSS_PER1000, 
+  log(adj_sale_price) ~ log_dist_highway  + log(distance_to_city_hall +1) + log (distance_to_nearest_transit +1) + log (nearest_restaurant_dist_m +1)  + log(distance_to_nearest_park +1) + zoning + zip_code + exterior_condition_recode + interior_condition + log(total_livable_area+1) + number_of_bathrooms  + number_of_bedrooms + quality_grade + log(distance_to_nearest_water+1) + central_air  + general_construction + separate_utilities  + building_code_description_new + crime_nn5 + MedHHInc + year_built_group +  LPSS_PER1000, 
           data = property_CT)
 
 model_summary <- tidy(lm_CT) %>%
