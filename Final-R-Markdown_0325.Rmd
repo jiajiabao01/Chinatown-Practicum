@@ -1521,6 +1521,39 @@ ggsave("PPT/Images/p2_discontinuity.png",
 
 # Aki - tbh idk if this is feasible....but it also might just be becasue i'm running on fumes rn....let's check back in after the second presentation
 
+# below is code suggestions from ChatGPT but it needs to be tweaked.
+
+# Create a new data frame with the predictor variable
+prediction_data <- data.frame(dist_to_I676m = discontinuity_plot$distance_to_highway)
+
+# Predict values using the fitted model
+prediction_data$predicted_log_price <- predict(model_i676_more, newdata = prediction_data)
+
+ggplot(discontinuity_plot, aes(x = distance_to_highway, y = mean_log_price, color = I676)) +
+  geom_point(size = 0.5) +
+  geom_line(data = prediction_data, aes(x = dist_to_I676m, y = predicted_log_price), 
+            color = "black", size = 1.2) +  # Use geom_line for custom model fit
+  geom_vline(xintercept = 0, color = "black", size = 2) +
+  scale_colour_manual(values = c("#eb5600", "#1a9988")) +
+  theme_minimal() +
+  theme(legend.position = "None",
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = ggtext::element_markdown(size = 12),
+        plot.caption = element_text(hjust = 0)) +
+  labs(title = 'Logged Sale Price as a Function of Distance to I-676', 
+       subtitle = glue("<span style='color:#1a9988;'>South Side</span> vs. <span style='color:#eb5600;'>North Side</span>"),
+       caption = "Lines represent Model 3 from our previous slide (Highway + Spatial + Internal Characteristic Effects)",
+       x = "Distance to the Highway (m)                          ",
+       y = "Log-transformed Sale Price") +
+  geom_label(aes(x = 0, y = 8, label = "I-676"),
+             fill = "black", color = "white", fontface = "bold", size = 5)
+
+
+# save image for powerpoint
+ggsave("PPT/Images/p2_discontinuity_modellines.png",
+       height = 7, width = 10, units = "in")
+
+
 ```
 
 # Predictive Modeling
