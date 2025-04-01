@@ -285,17 +285,19 @@ property_CT <- property_final %>%
     exterior_condition_recode = case_when(
       is.na(exterior_condition) | exterior_condition == 2 ~ "Good",
       exterior_condition %in% c(1, 6, 7) ~ "Average",
-      exterior_condition %in% c(3, 4, 5) ~ "Poor"
+      exterior_condition %in% c(3, 4, 5) ~ "Poor",
+      TRUE ~ "Unknown"
     ),
 
-    exterior_condition = factor(exterior_condition),
+    exterior_condition = factor(exterior_condition_recode),
   
     interior_condition_recode = case_when(
       interior_condition %in% c(2, NA) ~ "Good",
       interior_condition %in% c(1,4,6)~ "Average",
-      interior_condition %in% c(3,5,7) ~ "Poor"
+      interior_condition %in% c(3,5,7) ~ "Poor",
+      TRUE ~ "Unknown"
     ),
-    interior_condition = factor(interior_condition),
+    interior_condition = factor(interior_condition_recode),
     
     garage_spaces = case_when(
       is.na(garage_spaces) | garage_spaces == 0 ~ "0",    
@@ -336,7 +338,7 @@ property_CT <- property_final %>%
       quality_grade %in% c("A-","3", "7") ~ "2", 
       TRUE ~ "3"
     ),
-    quality_grade = factor(quality_grade),
+    quality_grade = factor(quality_grade_recode),
     
     separate_utilities = case_when(
       separate_utilities %in% c("A", "C") ~ "B",  
