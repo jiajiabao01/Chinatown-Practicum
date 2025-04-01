@@ -1203,160 +1203,160 @@ propi676_500 <- prop500[i676_buff,] %>%
 ```{r i676effects_featureExploration_fromSijia}
 # based off of the feature engineering that Sijia did 
 
-property_CT <- property_final %>%
-  mutate(
-    year_built = as.numeric(year_built),
-    year_built_group = case_when(
-      # year_built < 1990 ~ "Before 1990",
-      # year_built >= 1990 & year_built < 2000 ~ "1990-1999",
-      # year_built >= 2000 & year_built < 2020 ~ "2000s-2020s",
-      # year_built >= 2020 ~ "2020s+"
-      is.na(year_built) | year_built < 1990 ~ "Pre-90s",
-      year_built >= 1990 & year_built < 2000 ~ "90s",
-      year_built >= 2000 & year_built < 2010 ~ "00s",
-      year_built >= 2010 & year_built < 2020 ~ "10s",
-      year_built >= 2020 ~ "20s"
-      ),
-    
-    # log_price = log(adj_sale_price),
-    log_dist_highway = log(dist_to_I676),
-    
-    central_air = case_when(
-      central_air %in% c("1", "Y") ~ "Y",  
-      TRUE ~ "N"                          
-    ),
-    central_air = factor(central_air),
-    
-    exterior_condition = case_when(
-      # is.na(exterior_condition) | exterior_condition == 1 ~ "1",
-      # exterior_condition == 3 ~ "2",
-      # exterior_condition %in% c(2, 4, 5) ~ "3",
-      exterior_condition %in% c("1","2", "3", "4") ~ "AboveAverage",
-      exterior_condition == "5" ~ "Average",
-      exterior_condition %in% c("6","8","9") ~ "BelowAverage",
-      .default = "NAorVacant")
-    ),
-    exterior_condition = factor(exterior_condition),
-  
-    interior_condition = case_when(
-      # interior_condition %in% c(0, 1, 2, 3) ~ "1",         
-      # interior_condition %in% c(4, NA) ~ "2",        
-      # TRUE ~ "3"
-      interior_condition %in% c("1","2","3") ~ "AboveAverage",
-      interior_condition == "4" ~ "Average",
-      interior_condition %in% c("5","7") ~ "BelowAverage",
-      .default = "NAorVacant"
-    ),
-    interior_condition = factor(interior_condition),
-    
-    garage_spaces = case_when(
-      is.na(garage_spaces) | garage_spaces == 0 ~ "0",    
-      garage_spaces == 1 ~ "1",      
-      # TRUE ~ "2"
-      .default = "2orMore"
-    ),
-    garage_spaces = factor(garage_spaces),
-    
-    # general_construction = case_when(       
-    #   general_construction %in% c("A ", "B ", "D ") ~ "A",  
-    #   general_construction == "3 " ~ "C",        
-    #   TRUE ~ "B"                                 
-    # ),
-    # general_construction = factor(general_construction),
-    
-    number_of_bathrooms = case_when(
-      number_of_bathrooms == 1 ~ "1",                   
-      # number_of_bathrooms %in% c(2, NA) ~ "2",          
-      # number_of_bathrooms == 3 ~ "3",                   
-      # TRUE ~ "4"
-      number_of_bathrooms == 2 ~ "2",
-      number_of_bathrooms > 2 ~ "3orMore",
-      .default = "0" # NA or 0
-    ),
-    number_of_bathrooms = factor(number_of_bathrooms),
-    
-    number_of_bedrooms = case_when(
-      # number_of_bedrooms %in% c(0, 12) | is.na(number_of_bedrooms) ~ "0",  
-      # number_of_bedrooms %in% c(1, 2) ~ "1",    
-      # number_of_bedrooms == 3 ~ "2",            
-      # number_of_bedrooms == 4 ~ "3",            
-      # number_of_bedrooms %in% c(5, 6) ~ "4",    
-      # number_of_bedrooms %in% c(7, 8, 9) ~ "5" 
-      number_of_bedrooms >= 3 ~ "3orMore",
-      is.na(number_of_bedrooms) ~ "0",
-      .default = as.character(number_of_bedrooms)
-    ),
-    number_of_bedrooms = factor(number_of_bedrooms),
-    
-    quality_grade_recoded = case_when(
-      # quality_grade %in% c("A+", "A") ~ "1",  
-      # quality_grade %in% c("A-","3", "7") ~ "2",  
-      # TRUE ~ "3"
-      quality_grade %in% c("X", "X-", "X ") ~ "HighestQuality",
-      quality_grade %in% c("A+", "A", "A ", "A-", "1", "2") ~ "HigherQuality",
-      quality_grade %in% c("B+", "B", "B ", "B-", "3", "4") ~ "AverageQuality",
-      quality_grade %in% c("S+", "S", "C+", "5", "6") ~ "LowerQuality",
-      .default = "LowestQuality" # all lower grades + missing data
-    ),
-    quality_grade_recoded = factor(quality_grade_recoded),
-    
-    # separate_utilities = case_when(
-    #   separate_utilities %in% c("A", "C") ~ "B",  
-    #   TRUE ~ "A"                                 
-    # ),
-    # separate_utilities = factor(separate_utilities),
-    
-    building_code_description_new = case_when(
-      # building_code_description_new %in% c("COLONIAL", "OLD STYLE", "ROW MODERN", "ROW OLD STYLE", "TUDOR", "TWIN BUNGALOW") ~ "1",
-      # building_code_description_new %in% c("ROW POST WAR", "ROW TYPICAL", "TWIN CONVENTIONAL") ~ "3",
-      # building_code_description_new %in% c("OTHER", "ROW PORCH FRONT") ~ "4",
-      # TRUE ~ "2"
-      grepl("GYM", building_code_description_new) ~ "GYM",
-      grepl("^WARE", building_code_description_new) ~ "WAREHOUSE",
-      grepl("COLLEGE|SCHOOL", building_code_description_new) ~ "SCHOOL/COLLEGE/UNI",
-      grepl("ROW MIXED", building_code_description_new) ~ "ROWHOME MIXED",
-      grepl("TWIN MIXED", building_code_description_new) ~ "TWIN MIXED",
-      grepl("^ROW|^TWIN|CONDO|AS RESID", building_code_description_new) ~ "ROW/TWIN/CONDO", # apt blt as resid
-      grepl("BOARDING|SNGL", building_code_description_new) ~ "BOARDING/ROOMING/SNGL OCC",
-      grepl("MEDICAL", building_code_description_new) ~ "MEDICAL OFFICE",
-      grepl("FRAT", building_code_description_new) ~ "BOARDING/ROOMING/SNGL OCC",
-      grepl("LOW RISE", building_code_description_new, ignore.case = T) ~ "LOW RISE BLDG",
-      grepl("MID RISE", building_code_description_new) ~ "MID RISE APT",
-      grepl("HIGH RISE", building_code_description_new) ~ "HIGH RISE APT",
-      grepl("PARKING", building_code_description_new) ~ "PARKING",
-      grepl("BAR/", building_code_description_new) ~ building_code_description_new, # unchanged names
-      grepl("LEGIT", building_code_description_new) ~ building_code_description_new, # unchanged names
-      grepl("DIALYSI", building_code_description_new) ~ building_code_description_new, # unchanged names
-      grepl("OFFICE WA", building_code_description_new) ~ building_code_description_new, # unchanged names
-      grepl("CONV FOOD", building_code_description_new) ~ building_code_description_new, # unchanged names
-      grepl("MANUFACTU", building_code_description_new) ~ building_code_description_new, # unchanged names
-      .default = "OTHER" # including missing
-    ),
-    building_code_description_new = factor(building_code_description_new),
-
-    zoning_group = case_when(
-      # zoning %in% c("CMX5") ~ "CMX5",
-      # zoning %in% c("IRMX") ~ "IRMX",
-      # zoning %in% c("RM1","RM2", "RM4") ~ "RM",
-      # zoning %in% c("RMX3") ~ "RMX3",
-      # zoning %in% c("RSA5") ~ "RSA5",
-      # zoning %in% c("ICMX") ~ "ICMX",
-      # zoning %in% c("SPPOA") ~ "SPPOA",
-      # zoning %in% c("I2") ~ "I2",
-      # zoning %in% c("CMX2.5", "CMX2", "CMX1") ~ "CMX(1,2,2.5)",
-      # zoning %in% c("CMX3", "CMX4") ~ "CMX(3,4)",
-      zoning %in% c("CMX2.5", "CMX2", "CMX1") ~ "Nghbrhd Commercial Mixed",
-      zoning %in% c("CMX3", "CMX4") ~ "Cmmnty Commercial Mixed",
-      zoning == "CMX5" ~ "CC Commercial Mixed",
-      zoning == "RM1" ~ "Resid MultiFam-Big",
-      zoning == "RM4" ~ "Resid MultiFam-Small", 
-      zoning == "RMX3" ~ "Resid Mixed", 
-      grepl("RSA", zoning) ~ "Resid SnglFam Attached", 
-      zoning == "RTA1" ~ "Resid 2Fam Attached", 
-      zoning == "IRMX" ~ "Indstrl Resid Mixed", 
-      .default = "Other" # including missing
-      ),
-  )
+# property_CT <- property_final %>%
+#   mutate(
+#     year_built = as.numeric(year_built),
+#     year_built_group = case_when(
+#       # year_built < 1990 ~ "Before 1990",
+#       # year_built >= 1990 & year_built < 2000 ~ "1990-1999",
+#       # year_built >= 2000 & year_built < 2020 ~ "2000s-2020s",
+#       # year_built >= 2020 ~ "2020s+"
+#       is.na(year_built) | year_built < 1990 ~ "Pre-90s",
+#       year_built >= 1990 & year_built < 2000 ~ "90s",
+#       year_built >= 2000 & year_built < 2010 ~ "00s",
+#       year_built >= 2010 & year_built < 2020 ~ "10s",
+#       year_built >= 2020 ~ "20s"
+#       ),
+#     
+#     # log_price = log(adj_sale_price),
+#     log_dist_highway = log(dist_to_I676),
+#     
+#     central_air = case_when(
+#       central_air %in% c("1", "Y") ~ "Y",  
+#       TRUE ~ "N"                          
+#     ),
+#     central_air = factor(central_air),
+#     
+#     exterior_condition = case_when(
+#       # is.na(exterior_condition) | exterior_condition == 1 ~ "1",
+#       # exterior_condition == 3 ~ "2",
+#       # exterior_condition %in% c(2, 4, 5) ~ "3",
+#       exterior_condition %in% c("1","2", "3", "4") ~ "AboveAverage",
+#       exterior_condition == "5" ~ "Average",
+#       exterior_condition %in% c("6","8","9") ~ "BelowAverage",
+#       .default = "NAorVacant")
+#     ),
+#     exterior_condition = factor(exterior_condition),
+#   
+#     interior_condition = case_when(
+#       # interior_condition %in% c(0, 1, 2, 3) ~ "1",         
+#       # interior_condition %in% c(4, NA) ~ "2",        
+#       # TRUE ~ "3"
+#       interior_condition %in% c("1","2","3") ~ "AboveAverage",
+#       interior_condition == "4" ~ "Average",
+#       interior_condition %in% c("5","7") ~ "BelowAverage",
+#       .default = "NAorVacant"
+#     ),
+#     interior_condition = factor(interior_condition),
+#     
+#     garage_spaces = case_when(
+#       is.na(garage_spaces) | garage_spaces == 0 ~ "0",    
+#       garage_spaces == 1 ~ "1",      
+#       # TRUE ~ "2"
+#       .default = "2orMore"
+#     ),
+#     garage_spaces = factor(garage_spaces),
+#     
+#     # general_construction = case_when(       
+#     #   general_construction %in% c("A ", "B ", "D ") ~ "A",  
+#     #   general_construction == "3 " ~ "C",        
+#     #   TRUE ~ "B"                                 
+#     # ),
+#     # general_construction = factor(general_construction),
+#     
+#     number_of_bathrooms = case_when(
+#       number_of_bathrooms == 1 ~ "1",                   
+#       # number_of_bathrooms %in% c(2, NA) ~ "2",          
+#       # number_of_bathrooms == 3 ~ "3",                   
+#       # TRUE ~ "4"
+#       number_of_bathrooms == 2 ~ "2",
+#       number_of_bathrooms > 2 ~ "3orMore",
+#       .default = "0" # NA or 0
+#     ),
+#     number_of_bathrooms = factor(number_of_bathrooms),
+#     
+#     number_of_bedrooms = case_when(
+#       # number_of_bedrooms %in% c(0, 12) | is.na(number_of_bedrooms) ~ "0",  
+#       # number_of_bedrooms %in% c(1, 2) ~ "1",    
+#       # number_of_bedrooms == 3 ~ "2",            
+#       # number_of_bedrooms == 4 ~ "3",            
+#       # number_of_bedrooms %in% c(5, 6) ~ "4",    
+#       # number_of_bedrooms %in% c(7, 8, 9) ~ "5" 
+#       number_of_bedrooms >= 3 ~ "3orMore",
+#       is.na(number_of_bedrooms) ~ "0",
+#       .default = as.character(number_of_bedrooms)
+#     ),
+#     number_of_bedrooms = factor(number_of_bedrooms),
+#     
+#     quality_grade_recoded = case_when(
+#       # quality_grade %in% c("A+", "A") ~ "1",  
+#       # quality_grade %in% c("A-","3", "7") ~ "2",  
+#       # TRUE ~ "3"
+#       quality_grade %in% c("X", "X-", "X ") ~ "HighestQuality",
+#       quality_grade %in% c("A+", "A", "A ", "A-", "1", "2") ~ "HigherQuality",
+#       quality_grade %in% c("B+", "B", "B ", "B-", "3", "4") ~ "AverageQuality",
+#       quality_grade %in% c("S+", "S", "C+", "5", "6") ~ "LowerQuality",
+#       .default = "LowestQuality" # all lower grades + missing data
+#     ),
+#     quality_grade_recoded = factor(quality_grade_recoded),
+#     
+#     # separate_utilities = case_when(
+#     #   separate_utilities %in% c("A", "C") ~ "B",  
+#     #   TRUE ~ "A"                                 
+#     # ),
+#     # separate_utilities = factor(separate_utilities),
+#     
+#     building_code_description_new = case_when(
+#       # building_code_description_new %in% c("COLONIAL", "OLD STYLE", "ROW MODERN", "ROW OLD STYLE", "TUDOR", "TWIN BUNGALOW") ~ "1",
+#       # building_code_description_new %in% c("ROW POST WAR", "ROW TYPICAL", "TWIN CONVENTIONAL") ~ "3",
+#       # building_code_description_new %in% c("OTHER", "ROW PORCH FRONT") ~ "4",
+#       # TRUE ~ "2"
+#       grepl("GYM", building_code_description_new) ~ "GYM",
+#       grepl("^WARE", building_code_description_new) ~ "WAREHOUSE",
+#       grepl("COLLEGE|SCHOOL", building_code_description_new) ~ "SCHOOL/COLLEGE/UNI",
+#       grepl("ROW MIXED", building_code_description_new) ~ "ROWHOME MIXED",
+#       grepl("TWIN MIXED", building_code_description_new) ~ "TWIN MIXED",
+#       grepl("^ROW|^TWIN|CONDO|AS RESID", building_code_description_new) ~ "ROW/TWIN/CONDO", # apt blt as resid
+#       grepl("BOARDING|SNGL", building_code_description_new) ~ "BOARDING/ROOMING/SNGL OCC",
+#       grepl("MEDICAL", building_code_description_new) ~ "MEDICAL OFFICE",
+#       grepl("FRAT", building_code_description_new) ~ "BOARDING/ROOMING/SNGL OCC",
+#       grepl("LOW RISE", building_code_description_new, ignore.case = T) ~ "LOW RISE BLDG",
+#       grepl("MID RISE", building_code_description_new) ~ "MID RISE APT",
+#       grepl("HIGH RISE", building_code_description_new) ~ "HIGH RISE APT",
+#       grepl("PARKING", building_code_description_new) ~ "PARKING",
+#       grepl("BAR/", building_code_description_new) ~ building_code_description_new, # unchanged names
+#       grepl("LEGIT", building_code_description_new) ~ building_code_description_new, # unchanged names
+#       grepl("DIALYSI", building_code_description_new) ~ building_code_description_new, # unchanged names
+#       grepl("OFFICE WA", building_code_description_new) ~ building_code_description_new, # unchanged names
+#       grepl("CONV FOOD", building_code_description_new) ~ building_code_description_new, # unchanged names
+#       grepl("MANUFACTU", building_code_description_new) ~ building_code_description_new, # unchanged names
+#       .default = "OTHER" # including missing
+#     ),
+#     building_code_description_new = factor(building_code_description_new),
+# 
+#     zoning_group = case_when(
+#       # zoning %in% c("CMX5") ~ "CMX5",
+#       # zoning %in% c("IRMX") ~ "IRMX",
+#       # zoning %in% c("RM1","RM2", "RM4") ~ "RM",
+#       # zoning %in% c("RMX3") ~ "RMX3",
+#       # zoning %in% c("RSA5") ~ "RSA5",
+#       # zoning %in% c("ICMX") ~ "ICMX",
+#       # zoning %in% c("SPPOA") ~ "SPPOA",
+#       # zoning %in% c("I2") ~ "I2",
+#       # zoning %in% c("CMX2.5", "CMX2", "CMX1") ~ "CMX(1,2,2.5)",
+#       # zoning %in% c("CMX3", "CMX4") ~ "CMX(3,4)",
+#       zoning %in% c("CMX2.5", "CMX2", "CMX1") ~ "Nghbrhd Commercial Mixed",
+#       zoning %in% c("CMX3", "CMX4") ~ "Cmmnty Commercial Mixed",
+#       zoning == "CMX5" ~ "CC Commercial Mixed",
+#       zoning == "RM1" ~ "Resid MultiFam-Big",
+#       zoning == "RM4" ~ "Resid MultiFam-Small", 
+#       zoning == "RMX3" ~ "Resid Mixed", 
+#       grepl("RSA", zoning) ~ "Resid SnglFam Attached", 
+#       zoning == "RTA1" ~ "Resid 2Fam Attached", 
+#       zoning == "IRMX" ~ "Indstrl Resid Mixed", 
+#       .default = "Other" # including missing
+#       ),
+#   )
 
 ```
 
@@ -1375,12 +1375,13 @@ getRMSE <- function(model_results) {
 ```
 
 
-```{r i676effects_model}
+```{r i676effects_model1}
 # model with just distance to highway
 model_i676 <- lm(log_price ~ dist_to_I676m,
                  data = propi676_500)
 
 model_i676_summary <- summary(model_i676)
+model_i676_summary
 model_i676_RMSE <- getRMSE(model_i676)
 
 # model with just distance to highway + zip code
@@ -1405,7 +1406,45 @@ model_i676_more_RMSE <- getRMSE(model_i676_more)
 
 From a overly simple model, just looking at how distance to I676 (m) predicts property price (log transformed), we see that for properties within 500m of I676, distance from the highway does not have a large effect on property price. We see that for every additional meter away from I676, property price decreases by `r abs(round(exp(model_i676_summary$coefficients[2]) - 1, 3)*100)`% (basically a null effect). The R squared value of the model is very low at `r round(model_i676_summary$r.squared, 3)` and the RMSE is very high `r round(model_i676_RMSE,3)`, meaning the model is terrible.
 
+```{r i676effects_model2}
+# model with just distance to highway + zip code
+model_i676_zip <- lm(log_price ~ dist_to_I676m + zip_code,
+                     data = propi676_500)
+
+model_i676_zip_summary <- summary(model_i676_zip)
+model_i676_zip_RMSE <- getRMSE(model_i676_zip)
+model_i676_zip_summary
+
+model_i676_more <- lm(log_price ~ dist_to_I676m + 
+                        residential + # internal characteristics
+                        year_built + central_air + 
+                        number_of_bathrooms + total_area +
+                        quality_grade_recoded + 
+                        factor(zip_code), # neighborhood effects (via zip code for now)
+                      data = propi676_500)
+
+model_i676_more_summary <- summary(model_i676_more)
+model_i676_more_RMSE <- getRMSE(model_i676_more)
+
+```
+
 When we add ZIP code to this simple model, the adjusted R squared increases to `r round(model_i676_zip_summary$adj.r.squared, 3)` and RMSE decreases to `r round(model_i676_zip_RMSE,3)`, indicating that we have a slightly better, but still bad model. In this ZIP + distance to I676 model, keeping all else constant property price still decreases only by `r abs(round(exp(model_i676_zip_summary$coefficients[2]) - 1, 3)*100)`% per every additional meter away from the expressway.
+
+```{r i676effects_model3}
+# simple model but with more predictors
+model_i676_more <- lm(log_price ~ dist_to_I676m + 
+                        residential + # internal characteristics
+                        year_built + central_air + 
+                        number_of_bathrooms + total_area +
+                        quality_grade_recoded + 
+                        factor(zip_code), # neighborhood effects (via zip code for now)
+                      data = propi676_500)
+
+model_i676_more_summary <- summary(model_i676_more)
+model_i676_more_RMSE <- getRMSE(model_i676_more)
+model_i676_more_summary
+
+```
 
 Finally, we look at a more robust model (which is still relatively simple, including only internal features of the property in addition to ZIP code and distance to I676). This model includes the following predictors: year_built (categorical), quality_grade (categorical), number_of_bathrooms (categorical), total_area (continuous), central_air (binary), and a variable dictating whether the property is residential or not (binary). This more complex model does a better job at explaining the variance in property price than our previous two models, but is not optimal either. The adjusted R squared for this model is `r round(model_i676_more_summary$adj.r.squared, 3)` and our RMSE is `r round(model_i676_more_RMSE,3)`. When including these other predictors, the effect of distance to highway is not only much smaller than before, but is now also not statistically significant.
 
