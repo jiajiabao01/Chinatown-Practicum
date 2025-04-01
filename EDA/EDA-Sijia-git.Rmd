@@ -1299,8 +1299,9 @@ property_CT <- property_final %>%
     quality_grade = factor(quality_grade),
     
     separate_utilities = case_when(
-      separate_utilities %in% c("A", "C") ~ "B",  
-      TRUE ~ "A"                                 
+      separate_utilities = case_when(
+      separate_utilities %in% c("B") ~ "B", 
+      TRUE ~ "A"                                
     ),
     separate_utilities = factor(separate_utilities),
     
@@ -1340,8 +1341,20 @@ property_CT$depth[is.na(property_CT$depth)] <- mean_depth
 ## OLS Regression Modeling
 ```{r OLS}
 lm_CT <- lm(
-  log(adj_sale_price) ~ log_dist_highway  + log(distance_to_city_hall +1) + log (distance_to_nearest_transit +1) + log (nearest_restaurant_dist_m +1)  + log(distance_to_nearest_park +1) + zoning + zip_code + exterior_condition_recode + interior_condition + log(total_livable_area+1) + number_of_bathrooms  + number_of_bedrooms + quality_grade + log(distance_to_nearest_water+1) + central_air  + general_construction + separate_utilities  + building_code_description_new + crime_nn5 + MedHHInc + year_built_group +  LPSS_PER1000, 
-          data = property_CT)
+  log(adj_sale_price) ~ log_dist_highway  + 
+    log(distance_to_city_hall +1) + 
+    log(distance_to_nearest_transit +1) + 
+    log(nearest_restaurant_dist_m +1) + 
+    log(distance_to_nearest_park +1) + 
+    log(total_livable_area+1) + 
+    exterior_condition +year_built_group + interior_condition + 
+    building_code_description_new +
+    number_of_bathrooms + number_of_bedrooms + quality_grade +
+    log(distance_to_nearest_water+1) + zoning + zip_code +  central_air + general_construction + 
+    separate_utilities + building_code_description_new + 
+    crime_nn5 + MedHHInc + year_built_group + depth + LPSS_PER1000, 
+  data = property_CT
+)
 
 model_summary <- tidy(lm_CT) %>%
   mutate(
