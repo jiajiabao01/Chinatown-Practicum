@@ -246,6 +246,18 @@ Luming_property <- Luming_property %>%
 # write.csv(st_drop_geometry(Luming_property), "data/Luming_property.csv", row.names = FALSE)
 ```
 
+## Park changed
+
+```{r}
+park <- st_read("E:/Spring/Practicum/DataAnalysis/Chinatown/Dataset/ParksModified/Parks_within_1km.shp") %>%
+  st_transform('EPSG:2272')
+
+property_park <- property_studyarea %>%
+  dplyr::select(objectid, geometry) %>%
+  mutate(distance_to_nearest_park = calculate_nearest_distance(geometry, park))
+
+st_write(property_park, "data/property_park.geojson")
+```
 
 
 
