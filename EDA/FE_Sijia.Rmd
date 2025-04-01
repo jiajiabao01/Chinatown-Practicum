@@ -269,29 +269,31 @@ property_CT <- property_final %>%
     year_built = as.numeric(year_built),
     year_built_group = case_when(
     year_built < 1990 ~ "Before 1990",
-    year_built >= 1990 & year_built < 2000 ~ "1990-1999",
-    year_built >= 2000 & year_built < 2020 ~ "2000s-2020s",
-    year_built >= 2020 ~ "2020s+"),
+    year_built >= 1990 & year_built < 2000 ~ "1940-1979",
+    year_built >= 2000 & year_built < 2020 ~ "1980s-1990s",
+#    year_built >= 2010 & year_built < 2020 ~ "2000s-2010s",
+    year_built >= 2020 ~ "2010s+"),
     log_price = log(adj_sale_price),
     log_dist_highway = log(distance_to_I676 +1),
     
     central_air = case_when(
-      central_air %in% c("1", "Y") ~ "Y",  
+      central_air %in% c("1", "0","N","Y") ~ "Y",  
       TRUE ~ "N"                          
     ),
     central_air = factor(central_air),
     
-    exterior_condition = case_when(
-      is.na(exterior_condition) | exterior_condition == 1 ~ "1",
-      exterior_condition == 3 ~ "2",
-      exterior_condition %in% c(2, 4, 5) ~ "3",
+    exterior_condition_recode = case_when(
+      is.na(exterior_condition) | exterior_condition == 2 ~ "Good",
+      exterior_condition %in% c(1, 6, 7) ~ "Average",
+      exterior_condition %in% c(3, 4, 5) ~ "Poor"
     ),
+
     exterior_condition = factor(exterior_condition),
   
-    interior_condition = case_when(
-      interior_condition %in% c(0, 1, 2, 3) ~ "1",         
-      interior_condition %in% c(4, NA) ~ "2",        
-      TRUE ~ "3"       
+    interior_condition_recode = case_when(
+      interior_condition %in% c(2, NA) ~ "Good",
+      interior_condition %in% c(1,4,6)~ "Average",
+      interior_condition %in% c(3,5,7) ~ "Poor"
     ),
     interior_condition = factor(interior_condition),
     
@@ -330,9 +332,9 @@ property_CT <- property_final %>%
     
     
     quality_grade_recode = case_when(
-      quality_grade %in% c("A+", "A") ~ "1",  
-      quality_grade %in% c("A-","3", "7") ~ "2",  
-      TRUE ~ "3"                                           
+      quality_grade %in% c("A+", "A") ~ "1", 
+      quality_grade %in% c("A-","3", "7") ~ "2", 
+      TRUE ~ "3"
     ),
     quality_grade = factor(quality_grade),
     
@@ -363,6 +365,8 @@ property_CT <- property_final %>%
     zoning %in% c("CMX2.5", "CMX2", "CMX1") ~ "CMX(1,2,2.5)",
     zoning %in% c("CMX3", "CMX4") ~ "CMX(3,4)",
     TRUE ~ "Other"),
+  zoning_group = factor(zoning_group)
+
   )
 
 mean_depth <- mean(property_CT$depth, na.rm = TRUE)
