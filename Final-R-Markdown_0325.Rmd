@@ -1491,7 +1491,32 @@ discontinuity_plot <- properties_i676 %>%
 ```
 
 ```{r discontinuity_plot}
-ggplot(discontinuity_plot, aes(x = distance_to_highway, y = mean_log_price, color = I676)) +
+# correlations to add as annotations on the plot
+cor_north <- round(cor(discontinuity_plot %>% 
+                         filter(
+                           abs(distance_to_highway) <= 500,
+                           I676 == "north") %>% 
+                         pull(mean_log_price),
+                       discontinuity_plot %>% 
+                         filter(
+                           abs(distance_to_highway) <= 500,
+                           I676 == "north") %>% 
+                         pull(distance_to_highway)), 3)
+
+cor_south <- round(cor(discontinuity_plot %>% 
+                         filter(
+                           abs(distance_to_highway) <= 500,
+                           I676 == "south") %>% 
+                         pull(mean_log_price),
+                       discontinuity_plot %>% 
+                         filter(
+                           abs(distance_to_highway) <= 500,
+                           I676 == "south") %>% 
+                         pull(distance_to_highway)), 3)
+
+discontinuity_plot %>% 
+  filter(abs(distance_to_highway) <= 500) %>% # limiting it to the properties within 500m
+  ggplot(aes(x = distance_to_highway, y = mean_log_price, color = I676)) +
   geom_point(size = 0.5) +
   geom_smooth(method = "lm", se = FALSE, size = 1.2) +
   geom_vline(xintercept = 0, color = "black", size = 2) +
@@ -1503,16 +1528,26 @@ ggplot(discontinuity_plot, aes(x = distance_to_highway, y = mean_log_price, colo
         plot.caption = element_text(hjust = 0)) +
   labs(title = 'Logged Sale Price as a Function of Distance to I-676', 
        subtitle = glue("<span style='color:#1a9988;'>South Side</span> vs. <span style='color:#eb5600;'>North Side</span>"),
-       # caption = "Figure 4.1",
-       # x = "South Side of the Highway          I-676                                     North Side of the Highway",
-       x = "Distance to the Highyway (m)                          ",
+       x = "Distance to the Highyway (m)",
        y = "Log-transformed Sale Price") +
-    geom_label(aes(x = 0, y = 8,
-                 label = "I-676"),
-             fill = "black", color = "white", fontface = "bold", size = 5)
+  
+  # add annotations
+  geom_label(aes(x = 0, y = 8, label = "I-676"),
+             fill = "black", color = "white", fontface = "bold", size = 5) +
+  geom_text(aes(label = cor_north,
+                x = 250,
+                y = 11.825),
+            color = "#eb5600",
+            show.legend = F) +
+  geom_text(aes(label = cor_south,
+                x = -250,
+                y = 11.825),
+            color = "#1a9988",
+            show.legend = F)
+  
 
 # save image for powerpoint
-ggsave("PPT/Images/p2_discontinuity.png",
+ggsave("PPT/Images/p2_discontinuity_within_500m.png",
        height = 7, width = 10, units = "in")
 ```
 
