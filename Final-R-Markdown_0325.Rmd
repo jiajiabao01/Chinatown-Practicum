@@ -1147,6 +1147,41 @@ properties_i676_tomodel <- properties_i676 %>%
 
 ```
 
+Doing the same thing but only with the newest study area properties (with valid data after cleaning, focusing on the study area, not the cleaned data of all of Philly properties) --only leaves 94 properties.
+```{r i676effects_setup_studyareanew}
+# working with the newest philly_properties dataset where data was cleaned for our studyarea
+prop_studyarea_0329 <- st_read("Dataset/property_CT.geojson") # 1646 rows
+
+# add features for simple linear regression
+props_i676_tomodel <- prop_studyarea_0329 %>% 
+  filter() %>% # there are a couple properties with total area < 100; reduces dataset to 990 properties
+  # some feature engineering
+  mutate(dist_to_I676m = distance_to_I676 * 0.3048, # convert to meters
+         log_dist_i676 = log(dist_to_I676m),
+         
+         residential = ifelse(category_code_description %in% c("APARTMENTS  > 4 UNITS",
+                                                               "MIXED USE",
+                                                               "MULTI FAMILY",
+                                                               "SINGLE FAMILY",
+                                                               "GARAGE - RESIDENTIAL"),
+                              1, 0), # is this property residential? (including mixed)
+         
+         # all the other variables have been cleaned and feature engineered
+) %>% 
+  select(   # only keep vars necessary for model
+    log_price,
+    dist_to_I676m, log_dist_i676,
+    residential, 
+    year_built_group, 
+    central_air, garage_spaces, separate_utilities,
+    number_of_bathrooms, number_of_bedrooms, total_area,
+    exterior_condition, interior_condition, quality_grade,
+    building_code_description_new, zoning_group,
+    zip_code
+  )
+
+```
+
 ```{r i676effects_featureExploration}
 # Numeric variables
 # number_of_rooms was previously included but all but 10 values are NA
@@ -1458,6 +1493,52 @@ model_i676_more_summary
 
 Finally, we look at a more robust model (which is still relatively simple, including only internal features of the property in addition to ZIP code and distance to I676). This model includes the following predictors: year_built (categorical), quality_grade (categorical), number_of_bathrooms (categorical), total_area (continuous), central_air (binary), and a variable dictating whether the property is residential or not (binary). This more complex model does a better job at explaining the variance in property price than our previous two models, but is not optimal either. The adjusted R squared for this model is `r round(model_i676_more_summary$adj.r.squared, 3)` and our RMSE is `r round(model_i676_more_RMSE,3)`. When including these other predictors, the effect of distance to highway is not only much smaller than before, but is now also not statistically significant.
 
+#### Model Results (for newest studyarea properties)
+
+```{r i676effects_model1_studyareanew}
+# model with just distance to highway
+model_i676 <- lm(log_price ~ dist_to_I676m,
+                 data = props_i676_tomodel)
+
+model_i676_summary <- summary(model_i676)
+model_i676_summary
+model_i676_RMSE <- getRMSE(model_i676)
+
+```
+
+From a overly simple model, just looking at how distance to I676 (m) predicts property price (log transformed), we see that for properties within 500m of I676, distance from the highway does not have a large effect on property price. We see that for every additional meter away from I676, property price decreases by `r abs(round(exp(model_i676_summary$coefficients[2]) - 1, 3)*100)`% (basically a null effect). The R squared value of the model is very low at `r round(model_i676_summary$r.squared, 3)` and the RMSE is very high `r round(model_i676_RMSE,3)`, meaning the model is terrible.
+
+```{r i676effects_model2_studyareanew}
+# model with just distance to highway + zip code
+model_i676_zip <- lm(log_price ~ dist_to_I676m + zip_code,
+                     data = props_i676_tomodel)
+
+model_i676_zip_summary <- summary(model_i676_zip)
+model_i676_zip_RMSE <- getRMSE(model_i676_zip)
+model_i676_zip_summary
+
+```
+
+When we add ZIP code to this simple model, the adjusted R squared increases to `r round(model_i676_zip_summary$adj.r.squared, 3)` and RMSE decreases to `r round(model_i676_zip_RMSE,3)`, indicating that we have a slightly better, but still bad model. In this ZIP + distance to I676 model, keeping all else constant property price still decreases only by `r abs(round(exp(model_i676_zip_summary$coefficients[2]) - 1, 3)*100)`% per every additional meter away from the expressway.
+
+```{r i676effects_model3_studyareanew}
+# simple model but with more predictors
+model_i676_more <- lm(log_price ~ dist_to_I676m + 
+                        residential + # internal characteristics
+                        year_built_group + central_air + 
+                        number_of_bathrooms + total_area +
+                        quality_grade + 
+                        factor(zip_code), # neighborhood effects (via zip code for now)
+                      data = props_i676_tomodel)
+
+model_i676_more_summary <- summary(model_i676_more)
+model_i676_more_RMSE <- getRMSE(model_i676_more)
+model_i676_more_summary
+
+```
+
+Finally, we look at a more robust model (which is still relatively simple, including only internal features of the property in addition to ZIP code and distance to I676). This model includes the following predictors: year_built (categorical), quality_grade (categorical), number_of_bathrooms (categorical), total_area (continuous), central_air (binary), and a variable dictating whether the property is residential or not (binary). This more complex model does a better job at explaining the variance in property price than our previous two models, but is not optimal either. The adjusted R squared for this model is `r round(model_i676_more_summary$adj.r.squared, 3)` and our RMSE is `r round(model_i676_more_RMSE,3)`. When including these other predictors, the effect of distance to highway is not only much smaller than before, but is now also not statistically significant.
+
 We move forward with our analyses with the hypothesis that although distance to I676 does not play as much of a role in predicting property price, the Chinatown Stitch project will create an open green space that we can conceptualize as a park. We predict that the Chinatown Stitch cap as a park will have a statistically significant effect on property prices nearby.
 
 
@@ -1477,9 +1558,21 @@ We move forward with our analyses with the hypothesis that although distance to 
 #   summarise(log_sale_price = mean(log_sale_price, na.rm = TRUE), .groups = "drop")
 
 # with updated data (only 94 properties)
-discontinuity_plot <- properties_i676 %>%
+# discontinuity_plot <- properties_i676 %>%
+#   st_drop_geometry() %>%
+#   mutate(dist_to_I676m = distance_to_I676 * 0.3048,
+#          distance_to_highway = case_when(
+#            I676 == "north" ~ dist_to_I676m,
+#            I676 == "south" ~ -dist_to_I676m
+#            ),
+#          log_price = log(adjusted_sale_price)) %>% 
+#   group_by(distance_to_highway, I676) %>%
+#   summarise(mean_log_price = mean(log_price, na.rm = TRUE), .groups = "drop")
+
+# with most recently updated data (990 properties)
+discontinuity_plot <- props_i676_tomodel %>%
   st_drop_geometry() %>%
-  mutate(dist_to_I676m = distance_to_I676 * 0.3048,
+  mutate(I676 = ifelse(),
          distance_to_highway = case_when(
            I676 == "north" ~ dist_to_I676m,
            I676 == "south" ~ -dist_to_I676m
@@ -1547,8 +1640,8 @@ discontinuity_plot %>%
   
 
 # save image for powerpoint
-ggsave("PPT/Images/p2_discontinuity_within_500m.png",
-       height = 7, width = 10, units = "in")
+# ggsave("PPT/Images/p2_discontinuity_within_500m.png",
+#        height = 7, width = 10, units = "in")
 ```
 
 ```{r discontinuity_plot_modelline}
