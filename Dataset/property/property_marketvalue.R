@@ -14,14 +14,19 @@ property <- st_read("DataWrangling/data/opa_properties_public.geojson") %>%
 landuse <- st_read("Dataset/landuse_clip/Land_Use_ClipLayer.shp") %>%
   st_transform('EPSG:2272')
 
-
-assessment_geom <- left_join(assessment_unique, property[, c("parcel_number", "geometry", "sale_price")], by = "parcel_number")
+assessment_unique <- assessment_2025[!duplicated(assessment_2025$parcel_number), ]
 property_marketvalue <- left_join(property, assessment_unique[, c("parcel_number", "market_value")], by = "parcel_number")
 property_marketvalue_organized <- property_marketvalue %>%
   select(market_value.y, objectid) %>%
   rename(market_value_2025 = market_value.y)
 
 write.csv(property_marketvalue_organized, "Dataset/property/property_marketvalue_2025.csv", row.names = FALSE)
+
+property_organized <- property_marketvalue %>%
+  rename(market_value_2025 = market_value.y) %>%
+  select(-market_value.x)
+
+st_write(property_organized %>% st_transform('EPSG:3857'), "Dataset/property/property_marketvalue_2025.geojson", driver = "GeoJSON")
 
 property_marketvalue_check <- property_marketvalue %>%
   filter(market_value.x != as.numeric(market_value.y)) %>%
@@ -43,5 +48,5 @@ ggplot() +
   
 duplicates <- assessment_2025[duplicated(assessment_2025$parcel_number), ]
 duplicates_property <- property[duplicated(property$parcel_number), ]
-assessment_unique <- assessment_2025[!duplicated(assessment_2025$parcel_number), ]
+
 
