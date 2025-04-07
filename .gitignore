@@ -1,6 +1,10 @@
-.Rproj.user .Rhistory .RData .Ruserdata data/
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata data/
 google_api_aki.txt
 data/
 
 # Luming
 DataWrangling/data/
+.Rproj.user
