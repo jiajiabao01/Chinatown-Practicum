@@ -55,8 +55,8 @@ source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-L
 # wd <- "E:/Spring/Practicum/DataAnalysis/Chinatown"
 
 # Aki
-knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/")
-wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown/"
+knitr::opts_knit$set(root.dir = "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown-Practicum/")
+wd <- "~/Documents/MUSA/Spring25/MUSA8010_Practicum/Chinatown-Practicum/"
 
 nhoods_4326 <- 
   # st_read("DataWrangling/data/philadelphia-neighborhoods.geojson") %>% # Luming
@@ -129,6 +129,9 @@ hydro <- st_read("https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/servi
 
 philly_highways <- st_read("Dataset/Highways/Casestudy_Highways.shp") %>% 
   st_transform('EPSG:2272')
+
+# cleaned and feature engineered property data for study area
+property_studyarea_FE <- st_read("Dataset/property_CT_FE.geojson")
 
 ```
 
@@ -1150,13 +1153,14 @@ properties_i676_tomodel <- properties_i676 %>%
 Doing the same thing but only with the newest study area properties (with valid data after cleaning, focusing on the study area, not the cleaned data of all of Philly properties) --only leaves 94 properties.
 ```{r i676effects_setup_studyareanew}
 # working with the newest philly_properties dataset where data was cleaned for our studyarea
-prop_studyarea_0329 <- st_read("Dataset/property_CT.geojson") # 1646 rows
+property_studyarea_new <- st_read("Dataset/property_final.geojson")
 
 # add features for simple linear regression
-props_i676_tomodel <- prop_studyarea_0329 %>% 
-  filter() %>% # there are a couple properties with total area < 100; reduces dataset to 990 properties
+props_i676_tomodel <- property_studyarea_new %>% 
+  # filter() %>% # there are a couple properties with total area < 100; reduces dataset to 990 properties
   # some feature engineering
-  mutate(dist_to_I676m = distance_to_I676 * 0.3048, # convert to meters
+  mutate(log_price = log(adj_sale_price),
+         dist_to_I676m = distance_to_I676 * 0.3048, # convert to meters
          log_dist_i676 = log(dist_to_I676m),
          
          residential = ifelse(category_code_description %in% c("APARTMENTS  > 4 UNITS",
@@ -1172,13 +1176,16 @@ props_i676_tomodel <- prop_studyarea_0329 %>%
     log_price,
     dist_to_I676m, log_dist_i676,
     residential, 
-    year_built_group, 
+    year_built, 
     central_air, garage_spaces, separate_utilities,
     number_of_bathrooms, number_of_bedrooms, total_area,
     exterior_condition, interior_condition, quality_grade,
-    building_code_description_new, zoning_group,
-    zip_code
+    building_code_description_new, zoning,
+    zip_code,
+    I676_NS
   )
+
+# Aki 4/8/25 --- code is breaking because the property_studyarea_new used to read in data from property_CT.geojson, but the file structure is different from the new property_final.geojson
 
 ```
 
@@ -1525,7 +1532,7 @@ When we add ZIP code to this simple model, the adjusted R squared increases to `
 # simple model but with more predictors
 model_i676_more <- lm(log_price ~ dist_to_I676m + 
                         residential + # internal characteristics
-                        year_built_group + central_air + 
+                        year_built + central_air + 
                         number_of_bathrooms + total_area +
                         quality_grade + 
                         factor(zip_code), # neighborhood effects (via zip code for now)
@@ -1572,13 +1579,11 @@ We move forward with our analyses with the hypothesis that although distance to 
 # with most recently updated data (990 properties)
 discontinuity_plot <- props_i676_tomodel %>%
   st_drop_geometry() %>%
-  mutate(I676 = ifelse(),
-         distance_to_highway = case_when(
-           I676 == "north" ~ dist_to_I676m,
-           I676 == "south" ~ -dist_to_I676m
-           ),
-         log_price = log(adjusted_sale_price)) %>% 
-  group_by(distance_to_highway, I676) %>%
+  mutate(distance_to_highway = case_when(
+           I676_NS == "north" ~ dist_to_I676m,
+           I676_NS == "south" ~ -dist_to_I676m
+           )) %>% 
+  group_by(distance_to_highway, I676_NS) %>%
   summarise(mean_log_price = mean(log_price, na.rm = TRUE), .groups = "drop")
 
 ```
@@ -1588,28 +1593,28 @@ discontinuity_plot <- props_i676_tomodel %>%
 cor_north <- round(cor(discontinuity_plot %>% 
                          filter(
                            abs(distance_to_highway) <= 500,
-                           I676 == "north") %>% 
+                           I676_NS == "north") %>% 
                          pull(mean_log_price),
                        discontinuity_plot %>% 
                          filter(
                            abs(distance_to_highway) <= 500,
-                           I676 == "north") %>% 
+                           I676_NS == "north") %>% 
                          pull(distance_to_highway)), 3)
 
 cor_south <- round(cor(discontinuity_plot %>% 
                          filter(
                            abs(distance_to_highway) <= 500,
-                           I676 == "south") %>% 
+                           I676_NS == "south") %>% 
                          pull(mean_log_price),
                        discontinuity_plot %>% 
                          filter(
                            abs(distance_to_highway) <= 500,
-                           I676 == "south") %>% 
+                           I676_NS == "south") %>% 
                          pull(distance_to_highway)), 3)
 
 discontinuity_plot %>% 
   filter(abs(distance_to_highway) <= 500) %>% # limiting it to the properties within 500m
-  ggplot(aes(x = distance_to_highway, y = mean_log_price, color = I676)) +
+  ggplot(aes(x = distance_to_highway, y = mean_log_price, color = I676_NS)) +
   geom_point(size = 0.5) +
   geom_smooth(method = "lm", se = FALSE, size = 1.2) +
   geom_vline(xintercept = 0, color = "black", size = 2) +
@@ -1652,34 +1657,34 @@ discontinuity_plot %>%
 # below is code suggestions from ChatGPT but it needs to be tweaked.
 
 # Create a new data frame with the predictor variable
-prediction_data <- data.frame(dist_to_I676m = discontinuity_plot$distance_to_highway)
-
-# Predict values using the fitted model
-prediction_data$predicted_log_price <- predict(model_i676_more, newdata = prediction_data)
-
-ggplot(discontinuity_plot, aes(x = distance_to_highway, y = mean_log_price, color = I676)) +
-  geom_point(size = 0.5) +
-  geom_line(data = prediction_data, aes(x = dist_to_I676m, y = predicted_log_price), 
-            color = "black", size = 1.2) +  # Use geom_line for custom model fit
-  geom_vline(xintercept = 0, color = "black", size = 2) +
-  scale_colour_manual(values = c("#eb5600", "#1a9988")) +
-  theme_minimal() +
-  theme(legend.position = "None",
-        plot.title = element_text(size = 16, face = "bold"),
-        plot.subtitle = ggtext::element_markdown(size = 12),
-        plot.caption = element_text(hjust = 0)) +
-  labs(title = 'Logged Sale Price as a Function of Distance to I-676', 
-       subtitle = glue("<span style='color:#1a9988;'>South Side</span> vs. <span style='color:#eb5600;'>North Side</span>"),
-       caption = "Lines represent Model 3 from our previous slide (Highway + Spatial + Internal Characteristic Effects)",
-       x = "Distance to the Highway (m)                          ",
-       y = "Log-transformed Sale Price") +
-  geom_label(aes(x = 0, y = 8, label = "I-676"),
-             fill = "black", color = "white", fontface = "bold", size = 5)
+# prediction_data <- data.frame(dist_to_I676m = discontinuity_plot$distance_to_highway)
+# 
+# # Predict values using the fitted model
+# prediction_data$predicted_log_price <- predict(model_i676_more, newdata = prediction_data)
+# 
+# ggplot(discontinuity_plot, aes(x = distance_to_highway, y = mean_log_price, color = I676)) +
+#   geom_point(size = 0.5) +
+#   geom_line(data = prediction_data, aes(x = dist_to_I676m, y = predicted_log_price), 
+#             color = "black", size = 1.2) +  # Use geom_line for custom model fit
+#   geom_vline(xintercept = 0, color = "black", size = 2) +
+#   scale_colour_manual(values = c("#eb5600", "#1a9988")) +
+#   theme_minimal() +
+#   theme(legend.position = "None",
+#         plot.title = element_text(size = 16, face = "bold"),
+#         plot.subtitle = ggtext::element_markdown(size = 12),
+#         plot.caption = element_text(hjust = 0)) +
+#   labs(title = 'Logged Sale Price as a Function of Distance to I-676', 
+#        subtitle = glue("<span style='color:#1a9988;'>South Side</span> vs. <span style='color:#eb5600;'>North Side</span>"),
+#        caption = "Lines represent Model 3 from our previous slide (Highway + Spatial + Internal Characteristic Effects)",
+#        x = "Distance to the Highway (m)                          ",
+#        y = "Log-transformed Sale Price") +
+#   geom_label(aes(x = 0, y = 8, label = "I-676"),
+#              fill = "black", color = "white", fontface = "bold", size = 5)
 
 
 # save image for powerpoint
-ggsave("PPT/Images/p2_discontinuity_modellines.png",
-       height = 7, width = 10, units = "in")
+# ggsave("PPT/Images/p2_discontinuity_modellines.png",
+#        height = 7, width = 10, units = "in")
 
 
 ```
