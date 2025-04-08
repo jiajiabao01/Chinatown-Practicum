@@ -1,0 +1,119 @@
+body {
+  margin: 0;
+  font-family: "Rubik", sans-serif;
+  background-color: #f2f2f2;
+}
+
+/* natigation bar */
+.navbar {
+  top: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30px 40px;
+  background-color:  #f2f2f2;
+  border-bottom: 1px solid #ddd;
+}
+
+.navbar.hidden {
+  top: -100px;
+}
+
+.logo-title {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  height: 20px;
+  margin-right: 8px;
+}
+
+.project-name {
+  font-weight: bolder;
+  font-size: 16px;
+  color: #299988;
+}
+
+.nav-buttons,
+.about-btn {
+  display: flex;
+  gap: 20px;
+}
+
+.nav-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #299988;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.nav-btn:hover {
+  color: #E7551B;
+  font-weight: bold;
+}
+
+.nav-btn.active {
+  font-weight: bolder;
+  border-bottom: 2px solid #299988;
+}
+
+.navbar a {
+  text-decoration: none;
+}
+
+.navbar a:hover,
+.navbar a:active {
+  text-decoration: underline;
+}
+
+
+/* cover tittle */
+
+.tittle {
+  height: 100vh;
+  position: relative;
+  text-align: center;
+  color:  #434343;
+  background-color: #f2f2f2;
+}
+
+.tittle-tittle {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #299988;
+  font-size: 3em;
+  font-weight: bold; 
+  text-align: center;
+  font-family: 'Poppins', sans-serif;
+}
+
+.tittle-wrapper {
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-family: 'Poppins', sans-serif;
+}
+
+.tittle-subtittle {
+  font-size: 1em;
+  margin: 10px 0;
+}
+
+.tittle-scroll {
+  position: absolute;
+  top: 80%;
+  left: 50%;
+  color:  #4d4d4d;
+  transform: translate(-50%, -50%);
+  font-size: 1.8em;
+  font-style: italic;
+  font-family: 'Playfair Display', serif; 
+}
