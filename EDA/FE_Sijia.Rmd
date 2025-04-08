@@ -1,0 +1,275 @@
+---
+title: "Feature Engineering Section"
+author: "Sijia"
+date: '2025-03-08'
+output:
+    html_document:
+      code_folding: hide
+---
+
+```{r setup, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = FALSE, fig.show = "asis",
+    fig.align = "center")
+knitr::opts_knit$set(root.dir = "~/Documents/Upenn/Practicum/2025/results")
+
+palette5 <- colorRampPalette(c("#1a9988", "#eb5600"))(5)
+library(ggplot2)
+library(tidyverse)
+library(sf)
+library(dplyr)
+library(tidyr)
+library(rlang)
+library(patchwork)
+```
+
+### Data Set up
+```text
+1.  property_CT <- Property -  Chinatown scale - with FE
+2.  property_final <- Property - Chinatown scale - without FE
+2.  Third party: POIs (added in the property dataset)
+```   
+```{r Data set up, quiet = TRUE, results = 'hide'}
+property_final <- st_read("~/Documents/Upenn/Practicum/2025/Chinatown-Practicum/DataWrangling/property_final.geojson") %>%
+  st_transform('EPSG:2272')
+```
+
+### Features
+```text
+1. Log Distance to Restaurant
+2. Log Distance to grocery
+3. Features in Property Data
+  a. Internal Features
+    - interior condition 
+    - number of bathrooms 
+    - number of bedrooms 
+    - separate_utilities 
+
+  b. External Features
+    - years built 
+    - exterior condition 
+    - quality grade 
+    - central air 
+    - garage spaces 
+    - categorical code
+    
+  c. Spatial characteristics
+    - depth
+    - zoning 
+    - distances related features
+```
+### Feature Engineering
+```{r FE countinued}
+median_year <- median(property_final$year_built, na.rm = TRUE)
+median_bedroom <- median(as.numeric(as.character(property_final$number_of_bedrooms)), na.rm = TRUE)
+median_bathroom <- median(as.numeric(as.character(property_final$number_of_bathrooms)), na.rm = TRUE)
+
+property_CT <- property_final %>%
+  mutate(
+    # year built
+    year_built = as.numeric(year_built),
+    year_built_missing = ifelse(is.na(year_built), 1, 0),
+    year_built_filled = ifelse(is.na(year_built), median_year, year_built),
+    #year_built_group = case_when(
+    #  is.na(year_built) ~ "Unknown",
+    #  year_built < 1940 ~ "Pre-War",
+    #  year_built < 2000 ~ "Post-War Mid",
+    #  year_built < 2020 ~ "Modern",
+    #  year_built >= 2020 ~ "New"
+    #),
+    #year_built_group = factor(year_built_group, levels = c("Pre-War", "Post-War Mid", "Modern", "New", "Unknown")),
+
+    # log 
+    log_price = log(adj_sale_price),
+    log_dist_highway = log(distance_to_I676 + 1),
+
+    
+    # Central Air
+    central_air = case_when(
+      central_air %in% c("Y", "1") | is.na(central_air) ~ "Y",
+      central_air %in% c("N", "0") ~ "N"
+    ),
+    central_air = factor(central_air, levels = c("Y", "N")),
+#    central_air_missing = ifelse(central_air == "Unknown", 1, 0),
+
+    # Garage Spaces
+    garage_spaces = ifelse(garage_spaces %in% c(8, 10), NA, garage_spaces),
+    garage_spaces_missing = ifelse(is.na(garage_spaces), 1, 0),
+    garage_spaces = case_when(
+      is.na(garage_spaces) ~ "Unknown",
+      garage_spaces == 0 | garage_spaces == 1 ~ "less than 2",
+      TRUE ~ "2 or more"
+    ),
+    garage_spaces = factor(garage_spaces, levels = c("less than 2", "2 or more", "Unknown")),
+
+    # Bedrooms
+    number_of_bedrooms = as.numeric(as.character(number_of_bedrooms)),
+    number_of_bedrooms_missing = ifelse(is.na(number_of_bedrooms), 1, 0),
+    number_of_bedrooms_filled = ifelse(is.na(number_of_bedrooms), median_bedroom, number_of_bedrooms),
+    number_of_bedrooms = case_when(
+      is.na(number_of_bedrooms) ~ "NA",
+      number_of_bedrooms == 0 ~ "0",
+      number_of_bedrooms == 1 ~ "1",
+      number_of_bedrooms %in% c(2, 3, 4) ~ "2",
+      number_of_bedrooms %in% c(5, 6) ~ "3",
+      number_of_bedrooms %in% c(7, 9, 12) ~ "4",
+      TRUE ~ "Other"
+    ),
+    number_of_bedrooms = factor(number_of_bedrooms),
+
+    # Bathrooms
+    number_of_bathrooms = as.numeric(as.character(number_of_bathrooms)),
+    number_of_bathrooms_missing = ifelse(is.na(number_of_bathrooms), 1, 0),
+    number_of_bathrooms_filled = ifelse(is.na(number_of_bathrooms), median_bathroom, number_of_bathrooms),
+    number_of_bathrooms = case_when(
+      number_of_bathrooms == 0 ~ "0",
+      number_of_bathrooms == 1 ~ "1",
+      number_of_bathrooms == 2 ~ "2",
+      number_of_bathrooms %in% c(3, 4, 5) ~ "3-5",
+      number_of_bathrooms == 6 ~ "6",
+      number_of_bathrooms == 7 ~ "7",
+      TRUE ~ "Unknown"
+    ),
+    number_of_bathrooms = factor(number_of_bathrooms),
+
+    # total livable area
+    total_livable_area = ifelse(is.na(total_livable_area) | total_livable_area == 1, 0, total_livable_area),
+
+    # Quality Grade
+    quality_grade = case_when(
+      quality_grade %in% c("3 ", "7 ") ~ "Good",
+      quality_grade %in% c("A", "A+", "A-", "C+", "C") | is.na(quality_grade) ~ "Average",
+      TRUE ~ "Below Average"
+    ),
+    quality_grade = factor(quality_grade, levels = c("Good", "Average", "Below Average")),
+    quality_grade_missing = ifelse(is.na(property_final$quality_grade), 1, 0),
+
+    # Construction
+    general_construction = as.character(general_construction),
+    general_construction = case_when(
+      is.na(general_construction) ~ "Unknown",
+      TRUE ~ general_construction
+    ),
+    general_construction = factor(general_construction),
+    general_construction_missing = ifelse(general_construction == "Unknown", 1, 0),
+
+    # Separate Utilities
+    separate_utilities = case_when(
+      is.na(separate_utilities) ~ "Unknown",
+      TRUE ~ separate_utilities
+    ),
+    separate_utilities = factor(separate_utilities, levels = c("A", "B", "C", "Unknown")),
+    separate_utilities_missing = ifelse(separate_utilities == "Unknown", 1, 0),
+
+    # Exterior Condition
+    exterior_condition = case_when(
+      exterior_condition == 2 ~ "Good",
+      exterior_condition %in% c(1, 6, 7) ~ "Average",
+      exterior_condition %in% c(3, 4, 5) ~ "Below Average",
+      TRUE ~ "Unknown"
+    ),
+    exterior_condition = factor(exterior_condition),
+
+    # Interior Condition
+    interior_condition = case_when(
+      interior_condition %in% c(2, NA) ~ "Good",
+      interior_condition %in% c(1, 4, 7) ~ "Average",
+      interior_condition %in% c(3, 5, 6) ~ "Below Average",
+      TRUE ~ "Unknown"
+    ),
+    interior_condition = factor(interior_condition),
+
+    # Category Code
+    category_code_original = as.character(category_code),
+    category_code_group = case_when(
+      category_code == "12" ~ "6 ",
+      category_code == "14" ~ "2 ",
+      category_code == "10" ~ "4 ",
+      category_code == "15" ~ "5 ",
+      category_code == "16" ~ "4 ",
+      category_code == "7 "  ~ "4 ",
+      category_code == "8 "  ~ "6 ",
+      category_code == "9 "  ~ "2 ",
+      category_code %in% c("1 ", "2 ", "3 ", "4 ", "5 ", "6 ") ~ category_code,
+      TRUE ~ "Other"
+    ),
+    category_code = factor(category_code_group),
+
+    # Zoning
+    zoning_group = case_when(
+      zoning %in% c("CMX5") ~ "CMX5",
+      zoning %in% c("IRMX") ~ "IRMX",
+      zoning %in% c("RM1", "RM2", "RM4") ~ "RM",
+      zoning %in% c("RMX3") ~ "RMX3",
+      zoning %in% c("RSA5") ~ "RSA5",
+      zoning %in% c("ICMX") ~ "ICMX",
+      zoning %in% c("SPPOA") ~ "SPPOA",
+      zoning %in% c("I2") ~ "I2",
+      zoning %in% c("CMX2.5", "CMX2", "CMX1") ~ "CMX(1,2,2.5)",
+      zoning %in% c("CMX3", "CMX4") ~ "CMX(3,4)",
+      TRUE ~ "Other"
+    ),
+    zoning_group = factor(zoning_group),
+
+    zoning = case_when(
+      is.na(zoning) ~ "Unknown",
+      TRUE ~ zoning
+    ),
+    zoning = factor(zoning),
+    zip_code = factor(zip_code)
+  )
+
+mean_depth <- mean(property_CT$depth, na.rm = TRUE)
+property_CT$depth[is.na(property_CT$depth)] <- mean_depth
+
+
+
+```
+
+# Modeling
+## OLS Regression Modeling
+```{r OLS}
+lm_CT <- lm(
+  log(adj_sale_price) ~ log_dist_highway  + log(distance_to_city_hall +1) + log (distance_to_nearest_transit +1) + log (nearest_restaurant_dist_m +1)  + log(distance_to_nearest_park +1) + zoning + zip_code + exterior_condition + interior_condition + log1p(total_livable_area) + number_of_bathrooms  + number_of_bedrooms + quality_grade + log(distance_to_nearest_water+1) + central_air + year_built + year_built_missing  + general_construction + garage_spaces + separate_utilities  + category_code + crime_nn5  +LPSS_PER1000 +general_construction_missing+ number_of_bathrooms_missing + number_of_bedrooms_missing + separate_utilities_missing+ separate_utilities_missing,  
+          data = property_CT)
+
+model_summary <- tidy(lm_CT) %>%
+  mutate(
+    p.value = signif(p.value, 3),
+    estimate = round(estimate, 3),
+    std.error = round(std.error, 3),
+    statistic = round(statistic, 2),
+    sig = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      p.value < 0.1   ~ ".",
+      TRUE ~ ""
+    )
+  ) %>%
+  select(term, estimate, std.error, statistic, p.value, sig)
+
+glance_stats <- glance(lm_CT)
+
+model_stats <- tibble(
+  term = c("R-squared", "Adj. R-squared", "Num. Obs."),
+  estimate = c(round(glance_stats$r.squared, 3),
+               round(glance_stats$adj.r.squared, 3),
+               glance_stats$nobs),
+  std.error = NA,
+  statistic = NA,
+  p.value = NA,
+  sig = ""
+)
+model_full <- bind_rows(model_summary, model_stats)
+
+html_table <- model_full %>%
+  kable(format = "html", caption = "OLS Regression Results", digits = 3) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed")) %>%
+  row_spec(0, bold = TRUE, background = "#1a9988", color = "white")
+
+save_kable(html_table, file = "ols_table.html")
+webshot2::webshot("ols_table.html", file = "ols_table.png", vwidth = 1200, vheight = 3000)
+```
+
+
+
