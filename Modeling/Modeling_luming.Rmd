@@ -1,0 +1,463 @@
+---
+title: "Modeling"
+author: "Luming"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(sf)
+library(rsample)
+library(tidymodels)
+library(spatialsample)
+library(mapview)
+```
+
+# Packages
+
+```{r}
+load.fun <- function(x) { 
+  x <- as.character(x) 
+  if(isTRUE(x %in% .packages(all.available=TRUE))) { 
+    eval(parse(text=paste("require(", x, ")", sep=""))) 
+    print(paste(c(x, " : already installed; requiring"), collapse=''))
+  } else { 
+    #update.packages()
+    print(paste(c(x, " : not installed; installing"), collapse=''))
+    eval(parse(text=paste("install.packages('", x, "')", sep=""))) 
+    print(paste(c(x, " : installed and requiring"), collapse=''))
+    eval(parse(text=paste("require(", x, ")", sep=""))) 
+  } 
+} 
+
+packages = c(
+  # Core ML
+  "tidymodels", "tidyverse", 
+  # Specific model packages
+  "glmnet", "ranger", "xgboost",
+  # Newer spatial packages
+  "sf", "stars", "terra", "spatialsample", "nngeo", "mapview",
+  # Newer extensions
+  "finetune", "themis", "applicable", "vetiver",
+  # Existing packages
+  "bayesplot", "lme4", "RcppEigen", "AmesHousing"
+)
+
+for(i in seq_along(packages)){
+  packge <- as.character(packages[i])
+  load.fun(packge)
+}
+
+sessionInfo()
+```
+
+# Modeling
+
+## Set up
+
+```{r}
+set.seed(717)
+theme_set(theme_bw())
+
+"%!in%" <- Negate("%in%")
+g <- glimpse
+
+nn_function <- function(measureFrom,measureTo,k) {
+  library(FNN)
+  nn <-   
+    FNN::get.knnx(measureTo, measureFrom, k)$nn.dist
+  output <-
+    as.data.frame(nn) %>%
+    rownames_to_column(var = "thisPoint") %>%
+    gather(points, point_distance, V1:ncol(.)) %>%
+    arrange(as.numeric(thisPoint)) %>%
+    group_by(thisPoint) %>%
+    summarize(pointDistance = mean(point_distance)) %>%
+    arrange(as.numeric(thisPoint)) %>% 
+    dplyr::select(-thisPoint) %>%
+    pull()
+  
+  return(output)  
+}
+```
+
+## Data Preparation
+
+```{r}
+property_CT_FE <- st_read("E:/Spring/Practicum/DataAnalysis/Chinatown/Dataset/property_CT_FE.geojson") %>%
+  st_transform('EPSG:4326')
+
+property_modeling <- property_CT_FE %>%
+  mutate(
+    Longitude = st_coordinates(.)[, 1],
+    Latitude = st_coordinates(.)[, 2]
+  ) %>%
+  st_drop_geometry() %>%
+  mutate(log_distance_to_city_hall = log(distance_to_city_hall +1),
+         log_distance_to_nearest_transit = log (distance_to_nearest_transit +1),
+         log_nearest_restaurant_dist_m = log (nearest_restaurant_dist_m +1),
+         log_distance_to_nearest_park = log(distance_to_nearest_park +1),
+         log_distance_to_nearest_water = log(distance_to_nearest_water+1),
+         log_total_livable_area = log1p(total_livable_area),
+         log_adj_sale_price = log(adj_sale_price+1)) %>%
+  mutate(year_built = case_when(
+    is.na(year_built) ~ "Unknown",
+    TRUE ~ as.character(year_built)
+  )) %>%
+  select(log_dist_highway,
+         log_distance_to_city_hall,
+         log_distance_to_nearest_transit,
+         log_nearest_restaurant_dist_m,
+         log_distance_to_nearest_park,
+         zoning_group,
+         zip_code,
+         exterior_condition,
+         interior_condition,
+         log_total_livable_area, 
+         number_of_bathrooms,
+         number_of_bedrooms,
+         quality_grade,
+         log_distance_to_nearest_water,
+         central_air,
+         year_built, 
+         year_built_missing,
+         general_construction,
+         garage_spaces,
+         separate_utilities,
+         category_code,
+         crime_nn5,
+         LPSS_PER1000,
+         general_construction_missing,
+         number_of_bathrooms_missing,
+         number_of_bedrooms_missing,
+         separate_utilities_missing,
+         separate_utilities_missing,
+         log_adj_sale_price,
+         Longitude, Latitude)
+
+# Initial Split for Training and Test
+data_split <- initial_split(property_modeling, strata = "log_adj_sale_price", prop = 0.75)
+property_train <- training(data_split)
+property_test  <- testing(data_split)
+
+model_rec <- recipe(log_adj_sale_price ~ ., data = property_modeling) %>%
+  update_role(zoning_group, new_role = "zoning_group") %>%
+  # step_other(zoning_group, threshold = 0.005) %>%
+  step_novel(all_nominal()) %>%
+  step_dummy(all_nominal()) %>%
+  step_log(log_adj_sale_price, skip = TRUE) %>%
+  step_zv(all_predictors()) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors()) %>%
+  # step_center(all_predictors(), -log_adj_sale_price) %>%
+  # step_scale(all_predictors(), -log_adj_sale_price) %>%
+  step_ns(Latitude, Longitude, options = list(df = 4),keep_original_cols=TRUE)
+```
+
+## Moedl Specifications
+
+```{r}
+# Moedl Specifications
+lm_plan <- 
+  linear_reg() %>% 
+  set_engine("lm")
+
+glmnet_plan <- 
+  linear_reg() %>% 
+  set_args(penalty  = tune()) %>%
+  set_args(mixture  = tune()) %>%
+  set_engine("glmnet")
+
+rf_plan <- rand_forest() %>%
+  set_args(mtry  = tune()) %>%
+  set_args(min_n = tune()) %>%
+  set_args(trees = 1000) %>% 
+  set_engine("ranger", importance = "impurity") %>% 
+  set_mode("regression")
+
+XGB_plan <- boost_tree() %>%
+  set_args(mtry  = tune()) %>%
+  set_args(min_n = tune()) %>%
+  set_args(trees = 100) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("regression")
+
+# Hyperparameter grid for glmnet (penalization)
+glmnet_grid <- expand.grid(penalty = seq(0, 1, by = .25), 
+                           mixture = seq(0,1,0.25))
+rf_grid <- expand.grid(mtry = c(2,5,10,13,30,45), 
+                       min_n = c(5,50,100,500))
+xgb_grid <- expand.grid(mtry = c(3,5), 
+                        min_n = c(1,5))
+
+# create workflow
+lm_wf <-
+  workflow() %>% 
+  add_recipe(model_rec) %>% 
+  add_model(lm_plan)
+glmnet_wf <-
+  workflow() %>% 
+  add_recipe(model_rec) %>% 
+  add_model(glmnet_plan)
+rf_wf <-
+  workflow() %>% 
+  add_recipe(model_rec) %>% 
+  add_model(rf_plan)
+xgb_wf <-
+  workflow() %>% 
+  add_recipe(model_rec) %>% 
+  add_model(XGB_plan)
+
+# Spatial CV approach
+property_train_sf <- st_as_sf(property_train, coords = c("Longitude", "Latitude"), crs = 4326)
+property_train_sf <- property_train_sf %>%
+  mutate(
+    Longitude = st_coordinates(.)[, 1],
+    Latitude = st_coordinates(.)[, 2]
+  )
+
+cv_splits_geo <- group_vfold_cv(property_train,  
+                                group = "zoning_group")
+
+cv_splits_cluster <- spatial_clustering_cv(
+  property_train_sf,
+  v = 10,  # Number of folds
+  cluster_function = "kmeans"
+)
+cv_splits_geo <- cv_splits_geo
+
+# fit model to workflow and calculate metrics
+control <- control_resamples(save_pred = TRUE, verbose = TRUE)
+metrics <- metric_set(rmse, rsq, mape, smape)
+lm_tuned <- lm_wf %>%
+  tune::fit_resamples(.,
+                      resamples = cv_splits_geo,
+                      control   = control,
+                      metrics   = metrics)
+
+glmnet_tuned <- glmnet_wf %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = glmnet_grid,
+                  control   = control,
+                  metrics   = metrics)
+
+rf_tuned <- rf_wf %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = rf_grid,
+                  control   = control,
+                  metrics   = metrics)
+
+xgb_tuned <- xgb_wf %>%
+  tune::tune_grid(.,
+                  resamples = cv_splits_geo,
+                  grid      = xgb_grid,
+                  control   = control,
+                  metrics   = metrics)
+
+# 'Best' by some metric and margin
+lm_best_params     <- select_best(lm_tuned, metric = "rmse"    )
+glmnet_best_params <- select_best(glmnet_tuned, metric = "rmse")
+rf_best_params     <- select_best(rf_tuned, metric = "rmse"    )
+xgb_best_params    <- select_best(xgb_tuned, metric = "rmse"   )
+
+# Final workflow
+lm_best_wf     <- finalize_workflow(lm_wf, lm_best_params)
+glmnet_best_wf <- finalize_workflow(glmnet_wf, glmnet_best_params)
+rf_best_wf     <- finalize_workflow(rf_wf, rf_best_params)
+xgb_best_wf    <- finalize_workflow(xgb_wf, xgb_best_params)
+
+# last_fit() emulates the process where, after determining the best model, the final fit on the entire training set is needed and is then evaluated on the test set.
+lm_val_fit_geo <- lm_best_wf %>% 
+  last_fit(split     = data_split,
+           control   = control,
+           metrics   = metrics)
+
+glmnet_val_fit_geo <- glmnet_best_wf %>% 
+  last_fit(split     = data_split,
+           control   = control,
+           metrics   = metrics)
+
+rf_val_fit_geo <- rf_best_wf %>% 
+  last_fit(split     = data_split,
+           control   = control,
+           metrics   = metrics)
+
+xgb_val_fit_geo <- xgb_best_wf %>% 
+  last_fit(split     = data_split,
+           control   = control,
+           metrics   = metrics)
+```
+
+## Model Validation
+
+```{r}
+# Pull best hyperparam preds from out-of-fold predictions
+lm_best_OOF_preds <- collect_predictions(lm_tuned) 
+
+glmnet_best_OOF_preds <- collect_predictions(glmnet_tuned) %>% 
+  filter(penalty  == glmnet_best_params$penalty[1] & mixture == glmnet_best_params$mixture[1])
+
+rf_best_OOF_preds <- collect_predictions(rf_tuned) %>% 
+  filter(mtry  == rf_best_params$mtry[1] & min_n == rf_best_params$min_n[1])
+
+xgb_best_OOF_preds <- collect_predictions(xgb_tuned) %>% 
+  filter(mtry  == xgb_best_params$mtry[1] & min_n == xgb_best_params$min_n[1])
+
+# collect validation set predictions from last_fit model
+lm_val_pred_geo     <- collect_predictions(lm_val_fit_geo)
+glmnet_val_pred_geo <- collect_predictions(glmnet_val_fit_geo)
+rf_val_pred_geo     <- collect_predictions(rf_val_fit_geo)
+xgb_val_pred_geo    <- collect_predictions(xgb_val_fit_geo)
+
+
+# Aggregate OOF predictions (they do not overlap with Validation prediction set)
+OOF_preds <- rbind(data.frame(dplyr::select(lm_best_OOF_preds, .pred, log_adj_sale_price), model = "lm"),
+                   data.frame(dplyr::select(glmnet_best_OOF_preds, .pred, log_adj_sale_price), model = "glmnet"),
+                   data.frame(dplyr::select(rf_best_OOF_preds, .pred, log_adj_sale_price), model = "rf"),
+                   data.frame(dplyr::select(xgb_best_OOF_preds, .pred, log_adj_sale_price), model = "xgb")) %>% 
+  group_by(model) %>% 
+  mutate(RMSE = yardstick::rmse_vec(log_adj_sale_price, .pred),
+         MAE  = yardstick::mae_vec(log_adj_sale_price, .pred),
+         MAPE = yardstick::mape_vec(log_adj_sale_price, .pred)) %>% 
+  ungroup() %>% 
+  mutate(model = factor(model, levels=c("lm","glmnet","rf","xgb")))
+
+# Aggregate predictions from Validation set
+val_preds <- rbind(data.frame(lm_val_pred_geo, model = "lm"),
+                   data.frame(glmnet_val_pred_geo, model = "glmnet"),
+                   data.frame(rf_val_pred_geo, model = "rf"),
+                   data.frame(xgb_val_pred_geo, model = "xgb")) %>% 
+  left_join(., property_modeling %>% 
+              rowid_to_column(var = ".row") %>% 
+              dplyr::select(Latitude, Longitude, zoning_group, .row), 
+            by = ".row") %>% 
+  group_by(model) %>%
+  mutate(RMSE = yardstick::rmse_vec(log_adj_sale_price, .pred),
+         MAE  = yardstick::mae_vec(log_adj_sale_price, .pred),
+         MAPE = yardstick::mape_vec(log_adj_sale_price, .pred)) %>% 
+  ungroup() %>% 
+  mutate(model = factor(model, levels=c("lm","glmnet","rf","xgb")))
+```
+
+## Examine the models
+
+```{r}
+ggplot(data = OOF_preds %>% 
+         dplyr::select(model, RMSE) %>% 
+         distinct() , 
+       aes(x = model, y = RMSE, group = 1)) +
+  geom_path(color = "red") +
+  geom_label(aes(label = RMSE)) +
+  theme_bw()
+
+ggplot(data = val_preds %>% 
+         dplyr::select(model, RMSE) %>% 
+         distinct() , 
+       aes(x = model, y = RMSE, group = 1)) +
+  geom_path(color = "red") +
+  geom_label(aes(label = RMSE)) +
+  theme_bw()
+```
+
+
+```{r}
+# average error for each model
+ggplot(data = OOF_preds %>% 
+         dplyr::select(model, MAPE) %>% 
+         distinct() , 
+       aes(x = model, y = MAPE, group = 1)) +
+  geom_path(color = "red") +
+  geom_label(aes(label = paste0(round(MAPE,2),"%"))) +
+  theme_bw()
+
+# OOF predicted versus actual
+ggplot(OOF_preds, aes(x = log_adj_sale_price, y = .pred, group = model)) +
+  geom_point(alpha = 0.3) +
+  geom_abline(linetype = "dashed", color = "red") +
+  geom_smooth(method = "lm", color = "blue") +
+  coord_equal() +
+  facet_wrap(~model, nrow = 2) +
+  theme_bw()
+
+# plot MAPE by model type
+ggplot(data = val_preds %>% 
+         dplyr::select(model, MAPE) %>% 
+         distinct() , 
+       aes(x = model, y = MAPE, group = 1)) +
+  geom_path(color = "red") +
+  geom_label(aes(label = paste0(round(MAPE,1),"%"))) +
+  theme_bw()
+
+# Validation Predicted vs. actual
+ggplot(val_preds, aes(x = log_adj_sale_price, y = .pred, group = model)) +
+  geom_point(alpha = 0.3) +
+  geom_abline(linetype = "dashed", color = "red") +
+  geom_smooth(method = "lm", color = "blue") +
+  coord_equal() +
+  facet_wrap(~model, nrow = 2) +
+  theme_bw()
+```
+
+```{r}
+# join test data back to make spatial
+val_pred_sf <- val_preds %>% 
+  group_by(model) %>% 
+  rowwise() %>% 
+  mutate(RMSE = yardstick::rmse_vec(log_adj_sale_price, .pred),
+         MAE  = yardstick::mae_vec(log_adj_sale_price, .pred),
+         MAPE = yardstick::mape_vec(log_adj_sale_price, .pred)) %>% 
+  st_as_sf(., coords = c("Longitude", "Latitude"),
+           remove = FALSE,
+           crs = 4326)
+
+# map errors by point
+mapview(filter(val_pred_sf, model == "rf"), zcol = "MAPE")
+```
+
+```{r}
+# aggregate val error to Neighborhood 
+val_MAPE_by_hood <- val_preds %>% 
+  group_by(zoning_group, model) %>% 
+  summarise(RMSE = yardstick::rmse_vec(log_adj_sale_price, .pred),
+         MAE  = yardstick::mae_vec(log_adj_sale_price, .pred),
+         MAPE = yardstick::mape_vec(log_adj_sale_price, .pred)) %>% 
+  ungroup() 
+
+# plot MAPE by Hood
+ggplot(val_MAPE_by_hood, aes(x = reorder(zoning_group, MAPE), y = MAPE)) +
+  geom_bar(stat = "identity") +
+  # scale_y_continuous(breaks = seq(0,10,1)) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = -45, hjust = 0)
+  )
+```
+
+## Extract final model
+
+```{r}
+## Fit and Extract final model
+## Final fit on all data
+full_fit_lm     <- lm_best_wf %>% fit(property_modeling)
+full_fit_glmnet <- glmnet_best_wf %>% fit(property_modeling)
+full_fit_rf     <- rf_best_wf %>% fit(property_modeling)
+full_fit_xgb    <- xgb_best_wf %>% fit(property_modeling)
+
+# extract final fit model object as native package type
+lm_full_mod     <- full_fit_lm  $fit$fit$fit
+glmnet_full_mod <- full_fit_glmnet$fit$fit$fit
+rf_full_mod     <- full_fit_rf  $fit$fit$fit
+xgb_full_mod    <- full_fit_xgb $fit$fit$fit
+```
+
+# Predictions: scenario 2 and 3
+
+```{r}
+# rf_pred <- predict(rf_full_mod, data = scenario_2)
+# exp(rf_pred$predictions)
+```
+
