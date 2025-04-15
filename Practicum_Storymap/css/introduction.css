@@ -91,6 +91,15 @@ body {
   font-weight: bold; 
   text-align: center;
   font-family: 'Poppins', sans-serif;
+  animation: flashColor 2s infinite steps(1, end);
+}
+
+/* Keyframes: hold each color for 1s */
+@keyframes flashColor {
+  0%   { color: #279382; }
+  25%  { color: #DB5420; }
+  50% { color: #D09A27; }
+  75% { color: #0D564B; }
 }
 
 .tittle-wrapper {
@@ -105,15 +114,24 @@ body {
 .tittle-subtittle {
   font-size: 1em;
   margin: 10px 0;
+  color:#299988
 }
 
 .tittle-scroll {
   position: absolute;
   top: 80%;
   left: 50%;
-  color:  #4d4d4d;
+  color:  #6d6d6d;
   transform: translate(-50%, -50%);
   font-size: 1.8em;
   font-style: italic;
   font-family: 'Playfair Display', serif; 
+  animation: flashOpacity 2s infinite ease-in-out; /* Flashing scroll text animation */
+}
+
+/* Define keyframes */
+@keyframes flashOpacity {
+  0%   { opacity: 0.5; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.5; }
 }
