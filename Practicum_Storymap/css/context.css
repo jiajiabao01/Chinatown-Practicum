@@ -197,6 +197,10 @@ body, html {
 
 .slide.layout0 .text {
   color: white;
+  font-size: 1.3em;
+  text-align: left;
+  margin-left: 30%;
+  margin-right: 20%;
 }
 
 .slide.layout0.timeline .image {
@@ -357,8 +361,9 @@ body, html {
   
 .layout2 .text, .layout0 .text {
     margin-bottom: 40px;
-    margin-left: 15%;
-    margin-right: 15%;
+    margin-left: 20%;
+    margin-right: 10%;
+    text-align: left;
   }
   
 .layout2 .image {
