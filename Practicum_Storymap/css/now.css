@@ -125,7 +125,7 @@ body, html {
 
 .title-wrapper {
   position: absolute;
-  top: 80%;
+  top: 70%;
   left: 50%;
   transform: translate(-50%, -50%);
   color: #434343;
@@ -134,13 +134,13 @@ body, html {
 }
 
 .title-subtitle {
-  font-size: 1.75em;
+  font-size: 1.5em;
   margin: 20px 0 30px 0; /* Top: 20px, Bottom: 30px */
   /* text-align: center; */
 }
 
 .title-text {
-  font-size: 1.5em;
+  font-size: 1.25em;
   margin: 10px 0;
   /* text-align: left; */
 }
@@ -182,15 +182,15 @@ body, html {
   }
 
 .slide.layout1{
-  background-image: url('../img/background-callowhill.png');
+  background-image: url('../img/');
 }
 
 .slide.layout2{
-  background-image: url('../img/background-vst.png');
+  background-image: url('../img/');
 }
 
 .slide.layout3{
-  background-image: url('../img/background-chinatown.png');
+  background-image: url('../img/');
 }
 
 .layout1, .layout3 {
@@ -278,3 +278,24 @@ body, html {
     display: block;
     margin: 0 auto;
   }
+
+/* Button */
+.next-button {
+  align-self: flex-end;
+  margin-top: auto;
+  margin-right: 10%;
+  padding: 15px 40px;
+  border: none;
+  border-radius: 5px;
+  background-color: white;
+  color: #279382;
+  font-weight: bold;
+  font-size: 16px;
+  text-decoration: none;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.next-button:hover {
+  background-color: #DB5420;
+  color: white;
+}
