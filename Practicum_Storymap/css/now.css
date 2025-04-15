@@ -123,9 +123,22 @@ body, html {
   font-family: 'Poppins', sans-serif;
 }
 
+.title-scroll {
+  position: absolute;
+  top: 80%;
+  left: 50%;
+  color:  #6d6d6d;
+  transform: translate(-50%, -50%);
+  font-size: 1.8em;
+  font-style: italic;
+  font-family: 'Playfair Display', serif; 
+
+  animation: flashOpacity 2s infinite ease-in-out; /* Flashing scroll text animation */
+}
+
 .title-wrapper {
   position: absolute;
-  top: 70%;
+  top: 62.5%;
   left: 50%;
   transform: translate(-50%, -50%);
   color: #434343;
@@ -134,14 +147,14 @@ body, html {
 }
 
 .title-subtitle {
-  font-size: 1.5em;
-  margin: 20px 0 30px 0; /* Top: 20px, Bottom: 30px */
+  font-size: 1.25em;
+  margin: 0 0 20px 0; /* Top: 20px, Bottom: 30px */
   /* text-align: center; */
 }
 
 .title-text {
-  font-size: 1.25em;
-  margin: 10px 0;
+  font-size: 1em;
+  margin: 5px 0;
   /* text-align: left; */
 }
 
